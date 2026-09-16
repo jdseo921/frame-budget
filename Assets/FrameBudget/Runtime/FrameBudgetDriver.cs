@@ -7,10 +7,10 @@ using Debug = UnityEngine.Debug;
 namespace FrameBudget
 {
     /// <summary>
-    /// The scene's single behaviour. Owns the world, the presenter, the instrument and the HUD, and
-    /// runs the simulation on a fixed timestep accumulated from frame time. Order of work inside a
-    /// frame: sample the frame that just finished, apply any pending respawn, step the simulation
-    /// zero or more times, present, rebuild the HUD text.
+    /// The scene's single behaviour. Owns the world, the presenter, the instrument, the HUD and the
+    /// benchmark, and runs the simulation on a fixed timestep accumulated from frame time. Order of
+    /// work inside a frame: sample the frame that just finished, let the benchmark act on it, apply
+    /// any pending respawn, step the simulation zero or more times, present, rebuild the HUD text.
     /// </summary>
     [DefaultExecutionOrder(-1000)]
     [DisallowMultipleComponent]
@@ -19,6 +19,10 @@ namespace FrameBudget
         public const int MaxAgents = 200000;
 
         [SerializeField] private SimConfig config;
+
+        [Tooltip("Configs selectable by name from the command line with -frameBudgetConfig <asset name>.")]
+        [SerializeField] private SimConfig[] benchmarkConfigs = Array.Empty<SimConfig>();
+
         [SerializeField] private Material agentMaterial;
 
         private static readonly ProfilerMarker SimulationStepMarker = new ProfilerMarker("FrameBudget.SimulationStep");
@@ -29,6 +33,7 @@ namespace FrameBudget
         private NaiveAgentPresenter presenter;
         private FrameMetrics metrics;
         private FrameBudgetHud hud;
+        private BenchmarkRunner benchmark;
 
         private double accumulator;
         private int pendingAgentCount = -1;
@@ -36,6 +41,7 @@ namespace FrameBudget
         public SimConfig Config => config;
         public AgentWorld World => world;
         public FrameMetrics Metrics => metrics;
+        public BenchmarkRunner Benchmark => benchmark;
         public int AgentCount => world != null ? world.Count : 0;
         public bool HudVisible { get; set; } = true;
 
@@ -87,17 +93,31 @@ namespace FrameBudget
             presenter = new NaiveAgentPresenter(agentMaterial);
             metrics = new FrameMetrics();
             hud = new FrameBudgetHud();
+            benchmark = new BenchmarkRunner();
 
             LogConfig();
             Spawn(config.agentCount);
         }
 
+        private void Start()
+        {
+            if (!enabled) return;
+            if (BenchmarkLaunch.TryGetRequest(out string configName))
+            {
+                SimConfig cfg = ResolveConfig(configName);
+                if (cfg == null) return;
+                Debug.Log("[FrameBudget] Benchmark requested from the command line with config '" + cfg.name + "'.");
+                StartBenchmark(cfg);
+            }
+        }
+
         private void Update()
         {
             // 1. Sample the frame that just finished.
-            metrics.BeginFrame(SimMsLastFrame, StepsLastFrame, PresentMsLastFrame, StepCapHitLastFrame);
+            FrameSample sample = metrics.BeginFrame(SimMsLastFrame, StepsLastFrame, PresentMsLastFrame, StepCapHitLastFrame);
 
-            // 2. The operator may have asked for a respawn.
+            // 2. The benchmark may close a point and ask for a respawn; so may the operator.
+            benchmark.Tick(in sample);
             HandleInput();
             if (pendingAgentCount >= 0)
             {
@@ -124,6 +144,7 @@ namespace FrameBudget
 
                 double stepMs = stopwatch.Elapsed.TotalMilliseconds;
                 metrics.RecordStep(stepMs);
+                benchmark.RecordStep(stepMs);
                 simMs += stepMs;
                 accumulator -= dt;
                 steps++;
@@ -177,6 +198,22 @@ namespace FrameBudget
             pendingAgentCount = AgentCount;
         }
 
+        public void StartBenchmark(SimConfig cfg = null)
+        {
+            benchmark.Start(cfg != null ? cfg : config, this);
+        }
+
+        /// <summary>Switches the active config (timestep, steering, seed, techniques) and respawns. Used by the benchmark.</summary>
+        public void UseConfig(SimConfig cfg)
+        {
+            if (cfg == null) throw new ArgumentNullException(nameof(cfg));
+            string problem = cfg.Validate();
+            if (problem != null) throw new InvalidOperationException("SimConfig '" + cfg.name + "' is invalid: " + problem);
+            config = cfg;
+            LogConfig();
+            Spawn(cfg.agentCount);
+        }
+
         private void Spawn(int count)
         {
             world.Respawn(config, count);
@@ -196,11 +233,32 @@ namespace FrameBudget
         private void HandleInput()
         {
             if (Input.GetKeyDown(KeyCode.H)) HudVisible = !HudVisible;
+            if (benchmark.IsRunning) return;
             if (Input.GetKeyDown(KeyCode.UpArrow)) RequestAgentCount(AgentCount + 100);
             if (Input.GetKeyDown(KeyCode.DownArrow)) RequestAgentCount(AgentCount - 100);
             if (Input.GetKeyDown(KeyCode.PageUp)) RequestAgentCount(AgentCount + 1000);
             if (Input.GetKeyDown(KeyCode.PageDown)) RequestAgentCount(AgentCount - 1000);
             if (Input.GetKeyDown(KeyCode.R)) RequestRespawn();
+            if (Input.GetKeyDown(KeyCode.B)) StartBenchmark();
+        }
+
+        private SimConfig ResolveConfig(string name)
+        {
+            if (string.IsNullOrEmpty(name)) return config;
+            if (config != null && string.Equals(config.name, name, StringComparison.OrdinalIgnoreCase)) return config;
+            foreach (SimConfig candidate in benchmarkConfigs)
+            {
+                if (candidate != null && string.Equals(candidate.name, name, StringComparison.OrdinalIgnoreCase)) return candidate;
+            }
+
+            var available = new System.Text.StringBuilder();
+            if (config != null) available.Append(config.name);
+            foreach (SimConfig candidate in benchmarkConfigs)
+            {
+                if (candidate != null) available.Append(", ").Append(candidate.name);
+            }
+            Fatal("Unknown benchmark config '" + name + "'. Configs listed on the FrameBudgetDriver: " + available + ". Refusing to run a different config than the one asked for.");
+            return null;
         }
 
         private void LogConfig()
@@ -214,6 +272,7 @@ namespace FrameBudget
         {
             Debug.LogError("[FrameBudget] " + message + " The driver is disabled.");
             enabled = false;
+            BenchmarkLaunch.ExitIfUnattended(2);
         }
     }
 }

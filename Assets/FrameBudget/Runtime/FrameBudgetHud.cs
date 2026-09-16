@@ -14,7 +14,7 @@ namespace FrameBudget
     public sealed class FrameBudgetHud : IDisposable
     {
         private const string NotAvailable = "n/a (counter did not resolve)";
-        private const string Controls = "Up/Down +-100   PgUp/PgDn +-1000   R respawn   H hide HUD";
+        private const string Controls = "Up/Down +-100   PgUp/PgDn +-1000   R respawn   B benchmark   H hide HUD";
 
         private string text = "";
         private string agentCountField = "0";
@@ -30,7 +30,7 @@ namespace FrameBudget
         private Font monoFont;
         private Material graphMaterial;
 
-        /// <summary>Keeps the agent-count text field in step with counts changed by keyboard.</summary>
+        /// <summary>Keeps the agent-count text field in step with counts changed by keyboard or benchmark.</summary>
         public void NotifyAgentCount(int count)
         {
             agentCountField = count.ToString();
@@ -53,7 +53,7 @@ namespace FrameBudget
                  + "Present     " + FormatMs(m.PresentMs) + "     other (render+engine) " + FormatMs(m.OtherMs) + "\n"
                  + "GC alloc    " + (m.GcAllocatedValid ? FormatBytes(m.GcBytes) : NotAvailable) + "\n"
                  + "Draw calls  " + (m.DrawCallsValid ? FormatCount(m.DrawCalls) : NotAvailable) + "     SetPass " + (m.SetPassCallsValid ? FormatCount(m.SetPassCalls) : NotAvailable) + "\n"
-                 + Controls;
+                 + (d.Benchmark.IsRunning || d.Benchmark.IsFinished ? d.Benchmark.Status : Controls);
         }
 
         private static string BehindRealTime(FrameBudgetDriver d)
@@ -109,6 +109,7 @@ namespace FrameBudget
             GUI.Label(new Rect(panel.x + pad, panel.y + pad, panel.width - 2f * pad, textHeight), text, textStyle);
 
             float y = panel.yMax + pad;
+            if (!d.Benchmark.IsRunning)
             {
                 float h = Mathf.Round(40f * s);
                 float x = pad;
@@ -127,6 +128,8 @@ namespace FrameBudget
                 if (GUI.Button(new Rect(x, y, bw, h), "+1000", buttonStyle)) Adjust(d, +1000);
                 x += bw + pad;
                 if (GUI.Button(new Rect(x, y, bw, h), "Respawn", buttonStyle)) d.RequestRespawn();
+                x += bw + pad;
+                if (GUI.Button(new Rect(x, y, bw + Mathf.Round(20f * s), h), "Benchmark", buttonStyle)) d.StartBenchmark();
                 y += h + pad;
             }
 
