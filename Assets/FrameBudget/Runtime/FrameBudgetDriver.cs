@@ -34,6 +34,8 @@ namespace FrameBudget
         private FrameMetrics metrics;
         private FrameBudgetHud hud;
         private BenchmarkRunner benchmark;
+        private Camera worldCamera;
+        private readonly WorldViewport worldViewport = new WorldViewport();
 
         private double accumulator;
         private int pendingAgentCount = -1;
@@ -94,6 +96,12 @@ namespace FrameBudget
             metrics = new FrameMetrics();
             hud = new FrameBudgetHud();
             benchmark = new BenchmarkRunner();
+
+            worldCamera = Camera.main;
+            if (worldCamera == null)
+            {
+                Debug.LogWarning("[FrameBudget] No camera tagged MainCamera in the scene; the world view cannot be kept beside the HUD.");
+            }
 
             LogConfig();
             Spawn(config.agentCount);
@@ -173,11 +181,15 @@ namespace FrameBudget
 
             // 5. HUD text, rebuilt every frame (control condition; see FrameBudgetHud.BuildText).
             hud.BuildText(this);
+
+            // 6. Keep the world beside the HUD column, never under it (the column width comes from the last OnGUI).
+            worldViewport.Fit(worldCamera, HudVisible && !Application.isBatchMode ? hud.ColumnWidth : 0f, config.worldHalfExtent);
         }
 
         private void OnGUI()
         {
             if (HudVisible && !Application.isBatchMode) hud.Draw(this);
+            else hud.NotifyHidden();
         }
 
         private void OnDestroy()
