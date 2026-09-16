@@ -6,14 +6,6 @@
       "source": "builtin",
       "dependencies": {}
     },
-    "com.unity.multiplayer.center": {
-      "version": "1.0.1",
-      "depth": 0,
-      "source": "builtin",
-      "dependencies": {
-        "com.unity.modules.uielements": "1.0.0"
-      }
-    },
     "com.unity.test-framework": {
       "version": "1.6.0",
       "depth": 0,
