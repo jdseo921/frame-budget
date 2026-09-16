@@ -7,10 +7,10 @@ using Debug = UnityEngine.Debug;
 namespace FrameBudget
 {
     /// <summary>
-    /// The scene's single behaviour. Owns the world, the presenter and the instrument, and runs the
-    /// simulation on a fixed timestep accumulated from frame time. Order of work inside a frame:
-    /// sample the frame that just finished, apply any pending respawn, step the simulation zero or
-    /// more times, present.
+    /// The scene's single behaviour. Owns the world, the presenter, the instrument and the HUD, and
+    /// runs the simulation on a fixed timestep accumulated from frame time. Order of work inside a
+    /// frame: sample the frame that just finished, apply any pending respawn, step the simulation
+    /// zero or more times, present, rebuild the HUD text.
     /// </summary>
     [DefaultExecutionOrder(-1000)]
     [DisallowMultipleComponent]
@@ -28,6 +28,7 @@ namespace FrameBudget
         private AgentWorld world;
         private NaiveAgentPresenter presenter;
         private FrameMetrics metrics;
+        private FrameBudgetHud hud;
 
         private double accumulator;
         private int pendingAgentCount = -1;
@@ -36,6 +37,7 @@ namespace FrameBudget
         public AgentWorld World => world;
         public FrameMetrics Metrics => metrics;
         public int AgentCount => world != null ? world.Count : 0;
+        public bool HudVisible { get; set; } = true;
 
         public int StepsLastFrame { get; private set; }
         public double SimMsLastFrame { get; private set; }
@@ -84,6 +86,7 @@ namespace FrameBudget
             world = new AgentWorld();
             presenter = new NaiveAgentPresenter(agentMaterial);
             metrics = new FrameMetrics();
+            hud = new FrameBudgetHud();
 
             LogConfig();
             Spawn(config.agentCount);
@@ -146,12 +149,21 @@ namespace FrameBudget
             SimMsLastFrame = simMs;
             PresentMsLastFrame = stopwatch.Elapsed.TotalMilliseconds;
             StepCapHitLastFrame = capHit;
+
+            // 5. HUD text, rebuilt every frame (control condition; see FrameBudgetHud.BuildText).
+            hud.BuildText(this);
+        }
+
+        private void OnGUI()
+        {
+            if (HudVisible && !Application.isBatchMode) hud.Draw(this);
         }
 
         private void OnDestroy()
         {
             presenter?.Dispose();
             metrics?.Dispose();
+            hud?.Dispose();
         }
 
         /// <summary>Respawns with a new agent count at the start of the next frame.</summary>
@@ -177,11 +189,13 @@ namespace FrameBudget
             StepCapHitFrames = 0;
             DroppedSimulationSeconds = 0.0;
             metrics.ClearWindows();
+            hud.NotifyAgentCount(count);
             Debug.Log("[FrameBudget] Spawned " + count + " agents from seed " + config.seed + " (initial state hash " + world.StateHash().ToString("X16") + ").");
         }
 
         private void HandleInput()
         {
+            if (Input.GetKeyDown(KeyCode.H)) HudVisible = !HudVisible;
             if (Input.GetKeyDown(KeyCode.UpArrow)) RequestAgentCount(AgentCount + 100);
             if (Input.GetKeyDown(KeyCode.DownArrow)) RequestAgentCount(AgentCount - 100);
             if (Input.GetKeyDown(KeyCode.PageUp)) RequestAgentCount(AgentCount + 1000);
