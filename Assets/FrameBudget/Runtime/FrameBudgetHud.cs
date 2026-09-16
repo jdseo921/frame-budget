@@ -1,3 +1,6 @@
+// FEATURE-FROZEN. This HUD is the instrument the demo video films. Further layout work is out of
+// scope for the week; change it only if a measurement is unreadable on camera, and name that
+// measurement in the commit message.
 using System;
 using UnityEngine;
 using UnityEngine.Rendering;
