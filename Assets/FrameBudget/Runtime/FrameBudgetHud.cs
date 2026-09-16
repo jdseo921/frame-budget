@@ -5,16 +5,24 @@ using UnityEngine.Rendering;
 namespace FrameBudget
 {
     /// <summary>
-    /// IMGUI instrument panel. This is a measuring display, not a product: it has to stay legible in
-    /// a 720p screen recording, so every size scales with Screen.height. The text is rebuilt every
-    /// frame with string concatenation on purpose (see <see cref="BuildText"/>). The frame-time graph
-    /// is drawn with GL in one batch so the HUD costs a fixed handful of draw calls, not one per bar;
-    /// press H to hide the HUD and read its own overhead off the counters.
+    /// IMGUI instrument panel: a median / p95 table, the controls, and a 120-frame frame-time graph
+    /// with the budget line. It has to read in a 720p screen recording, so every size scales with
+    /// Screen.height and the panel is opaque enough that agents never bleed through the text. Graph
+    /// labels live in their own gutter and caption strip, so bars can never cover them. The text is
+    /// rebuilt every frame with string concatenation on purpose (see <see cref="BuildText"/>). The
+    /// graph is drawn with GL in one batch so the HUD costs a fixed handful of draw calls; press H to
+    /// hide it and read its own overhead off the counters.
     /// </summary>
     public sealed class FrameBudgetHud : IDisposable
     {
-        private const string NotAvailable = "n/a (counter did not resolve)";
-        private const string Controls = "Up/Down +-100   PgUp/PgDn +-1000   R respawn   B benchmark   H hide HUD";
+        private const int LabelWidth = 14;
+        private const int ColumnWidth = 10;
+        private const string NotResolved = "n/a - counter did not resolve";
+        private const string Controls = "Up/Dn +-100 · PgUp/PgDn +-1000 · R respawn · B benchmark · H hide HUD";
+
+        private static readonly Func<double, string> MsFormat = v => v.ToString("F2") + " ms";
+        private static readonly Func<double, string> CountFormat = v => v.ToString("F0");
+        private static readonly Func<double, string> BytesFormat = FormatBytes;
 
         private string text = "";
         private string agentCountField = "0";
@@ -42,45 +50,41 @@ namespace FrameBudget
             FrameMetrics m = d.Metrics;
             SimConfig c = d.Config;
 
-            // CONTROL: the whole HUD string is rebuilt with '+' concatenation every frame. Every '+'
-            //          and every ToString() below allocates a fresh string, so this shows up in
-            //          "GC Allocated In Frame" even when the simulation is idle.
+            // CONTROL: the whole HUD string is rebuilt with '+' concatenation every frame. Every '+',
+            //          every ToString() and every Pad below allocates a fresh string, so this shows up
+            //          in "GC Allocated In Frame" even when the simulation is idle.
             //          Replaced by the zeroAlloc technique (cached strings, rebuilt only when a value changes).
-            text = "FRAME BUDGET   " + c.TechniqueLabel + "   Unity " + Application.unityVersion + (Application.isEditor ? " (Editor)" : " (Player)") + "\n"
-                 + "Agents      " + d.AgentCount + "     seed " + c.seed + "     step " + (c.fixedTimestep * 1000f).ToString("F2") + " ms\n"
-                 + "Frame       " + FormatMs(m.FrameMs) + "     main thread " + (m.MainThreadValid ? FormatMs(m.MainThreadMs) : NotAvailable) + "\n"
-                 + "Sim step    " + FormatMs(m.StepMs) + "     steps/frame " + d.StepsLastFrame + BehindRealTime(d) + "\n"
-                 + "Present     " + FormatMs(m.PresentMs) + "     other (render+engine) " + FormatMs(m.OtherMs) + "\n"
-                 + "GC alloc    " + (m.GcAllocatedValid ? FormatBytes(m.GcBytes) : NotAvailable) + "\n"
-                 + "Draw calls  " + (m.DrawCallsValid ? FormatCount(m.DrawCalls) : NotAvailable) + "     SetPass " + (m.SetPassCallsValid ? FormatCount(m.SetPassCalls) : NotAvailable) + "\n"
+            text = "FRAME BUDGET · " + d.AgentCount + " agents · " + c.TechniqueLabel + " · Unity " + Application.unityVersion + (Application.isEditor ? " (Editor)" : " (Player)") + "\n"
+                 + "seed " + c.seed + " · dt " + (c.fixedTimestep * 1000f).ToString("F2") + " ms · " + d.StepsLastFrame + " step/frame" + BehindRealTime(d) + "\n"
+                 + "\n"
+                 + "".PadRight(LabelWidth) + "median".PadLeft(ColumnWidth) + "p95".PadLeft(ColumnWidth) + "\n"
+                 + Row("Frame", m.FrameMs, true, MsFormat)
+                 + Row("Main thread", m.MainThreadMs, m.MainThreadValid, MsFormat)
+                 + Row("Sim step", m.StepMs, true, MsFormat)
+                 + Row("Present", m.PresentMs, true, MsFormat)
+                 + Row("Render+engine", m.OtherMs, true, MsFormat)
+                 + Row("GC / frame", m.GcBytes, m.GcAllocatedValid, BytesFormat)
+                 + Row("Draw calls", m.DrawCalls, m.DrawCallsValid, CountFormat)
+                 + Row("SetPass", m.SetPassCalls, m.SetPassCallsValid, CountFormat)
+                 + "\n"
                  + (d.Benchmark.IsRunning || d.Benchmark.IsFinished ? d.Benchmark.Status : Controls);
         }
 
         private static string BehindRealTime(FrameBudgetDriver d)
         {
             if (d.StepCapHitFrames == 0) return "";
-            return "     behind real time: " + d.DroppedSimulationSeconds.ToString("F1") + " s dropped over " + d.StepCapHitFrames + " capped frames";
+            return " · behind " + d.DroppedSimulationSeconds.ToString("F1") + " s (" + d.StepCapHitFrames + " capped)";
         }
 
-        private static string FormatMs(RollingWindow w)
+        private static string Row(string label, RollingWindow w, bool valid, Func<double, string> format)
         {
-            if (w.Count == 0) return "--";
-            return w.Median.ToString("F2") + " ms  p95 " + w.P95.ToString("F2");
+            string padded = label.PadRight(LabelWidth);
+            if (!valid) return padded + NotResolved + "\n";
+            if (w.Count == 0) return padded + "--".PadLeft(ColumnWidth) + "--".PadLeft(ColumnWidth) + "\n";
+            return padded + format(w.Median).PadLeft(ColumnWidth) + format(w.P95).PadLeft(ColumnWidth) + "\n";
         }
 
-        private static string FormatCount(RollingWindow w)
-        {
-            if (w.Count == 0) return "--";
-            return w.Median.ToString("F0") + "  p95 " + w.P95.ToString("F0");
-        }
-
-        private static string FormatBytes(RollingWindow w)
-        {
-            if (w.Count == 0) return "--";
-            return FormatByteValue(w.Median) + "  p95 " + FormatByteValue(w.P95);
-        }
-
-        private static string FormatByteValue(double bytes)
+        private static string FormatBytes(double bytes)
         {
             if (bytes >= 1048576.0) return (bytes / 1048576.0).ToString("F2") + " MB";
             if (bytes >= 1024.0) return (bytes / 1024.0).ToString("F1") + " KB";
@@ -100,7 +104,7 @@ namespace FrameBudget
             captionStyle.fontSize = Mathf.Max(10, Mathf.RoundToInt(15f * s));
 
             float pad = Mathf.Round(10f * s);
-            float panelWidth = Mathf.Min(Screen.width - 2f * pad, Mathf.Round(900f * s));
+            float panelWidth = Mathf.Min(Screen.width - 2f * pad, Mathf.Round(800f * s));
 
             content.text = text;
             float textHeight = textStyle.CalcHeight(content, panelWidth - 2f * pad);
@@ -112,36 +116,23 @@ namespace FrameBudget
             if (!d.Benchmark.IsRunning)
             {
                 float h = Mathf.Round(40f * s);
+                float w = Mathf.Round(130f * s);
                 float x = pad;
-                float fieldW = Mathf.Round(130f * s);
-                float bw = Mathf.Round(120f * s);
 
-                agentCountField = GUI.TextField(new Rect(x, y, fieldW, h), agentCountField, 7, fieldStyle);
-                x += fieldW + pad;
-                if (GUI.Button(new Rect(x, y, bw, h), "Apply", buttonStyle) && int.TryParse(agentCountField, out int requested))
+                agentCountField = GUI.TextField(new Rect(x, y, w, h), agentCountField, 7, fieldStyle);
+                x += w + pad;
+                if (GUI.Button(new Rect(x, y, w, h), "Apply", buttonStyle) && int.TryParse(agentCountField, out int requested))
                 {
                     d.RequestAgentCount(requested);
                 }
-                x += bw + pad;
-                if (GUI.Button(new Rect(x, y, bw, h), "-1000", buttonStyle)) Adjust(d, -1000);
-                x += bw + pad;
-                if (GUI.Button(new Rect(x, y, bw, h), "+1000", buttonStyle)) Adjust(d, +1000);
-                x += bw + pad;
-                if (GUI.Button(new Rect(x, y, bw, h), "Respawn", buttonStyle)) d.RequestRespawn();
-                x += bw + pad;
-                if (GUI.Button(new Rect(x, y, bw + Mathf.Round(20f * s), h), "Benchmark", buttonStyle)) d.StartBenchmark();
+                x += w + pad;
+                if (GUI.Button(new Rect(x, y, w, h), "Respawn", buttonStyle)) d.RequestRespawn();
+                x += w + pad;
+                if (GUI.Button(new Rect(x, y, w, h), "Benchmark", buttonStyle)) d.StartBenchmark();
                 y += h + pad;
             }
 
-            var graph = new Rect(pad, y, panelWidth, Mathf.Round(180f * s));
-            DrawGraph(d.Metrics, graph, s);
-        }
-
-        private void Adjust(FrameBudgetDriver d, int delta)
-        {
-            int n = Mathf.Max(0, d.AgentCount + delta);
-            agentCountField = n.ToString();
-            d.RequestAgentCount(n);
+            DrawGraph(d.Metrics, new Rect(pad, y, panelWidth, Mathf.Round(170f * s)), s);
         }
 
         private void DrawGraph(FrameMetrics m, Rect r, float s)
@@ -152,14 +143,16 @@ namespace FrameBudget
             double budget = FrameMetrics.BudgetMs;
 
             // Vertical scale: at least two budgets tall, grows in whole budgets so the budget line
-            // never leaves the graph, clipped at twenty budgets (bars above that are drawn full height).
+            // never leaves the plot, clipped at twenty budgets (taller bars are drawn full height).
             double maxValue = n > 0 ? frames.Max : 0.0;
             double yMax = Math.Max(2.0 * budget, Math.Ceiling(maxValue / budget) * budget);
             yMax = Math.Min(yMax, 20.0 * budget);
 
-            // Bars live in the plot area; the caption gets its own strip underneath so it never sits on top of the data.
+            // Bars are confined to the plot. Axis labels live in a gutter on the right and the caption
+            // in a strip underneath, so no bar can ever paint over a label.
             float capH = Mathf.Round(20f * s);
-            var plot = new Rect(r.xMin, r.yMin, r.width, r.height - capH - 6f * s);
+            float gutter = Mathf.Round(110f * s);
+            var plot = new Rect(r.xMin, r.yMin, r.width - gutter, r.height - capH - 6f * s);
             float budgetY = plot.yMax - (float)(budget / yMax) * plot.height;
 
             if (Event.current.type == EventType.Repaint)
@@ -169,7 +162,7 @@ namespace FrameBudget
                 GL.LoadPixelMatrix(0f, Screen.width, Screen.height, 0f);   // GUI space: origin top-left, y down
                 GL.Begin(GL.QUADS);
 
-                Quad(r.xMin, r.yMin, r.xMax, r.yMax, new Color(0f, 0f, 0f, 0.7f));
+                Quad(r.xMin, r.yMin, r.xMax, r.yMax, new Color(0f, 0f, 0f, 0.88f));
 
                 float barW = plot.width / FrameMetrics.WindowSize;
                 float barInner = Mathf.Max(1f, barW - Mathf.Max(1f, s));
@@ -190,16 +183,21 @@ namespace FrameBudget
                     }
                 }
 
-                Quad(plot.xMin, budgetY - 1f, plot.xMax, budgetY + 1f, new Color(1f, 0.85f, 0.1f, 1f));
+                // Budget line across the plot, with a short tick into the gutter pointing at its label.
+                Quad(plot.xMin, budgetY - 1f, plot.xMax + 5f * s, budgetY + 1f, new Color(1f, 0.85f, 0.1f, 1f));
 
                 GL.End();
                 GL.PopMatrix();
             }
 
-            GUI.Label(new Rect(plot.xMin + 6f * s, budgetY - capH - 2f * s, 300f * s, capH), budget.ToString("F1") + " ms budget", captionStyle);
-            GUI.Label(new Rect(plot.xMax - 160f * s, plot.yMin + 2f * s, 154f * s, capH), yMax.ToString("F0") + " ms", captionStyle);
+            float labelX = plot.xMax + 8f * s;
+            float labelW = gutter - 8f * s;
+            float budgetLabelY = Mathf.Clamp(budgetY - capH * 0.5f, plot.yMin + capH, plot.yMax - 2f * capH);
+            GUI.Label(new Rect(labelX, plot.yMin, labelW, capH), yMax.ToString("F0") + " ms", captionStyle);
+            GUI.Label(new Rect(labelX, budgetLabelY, labelW, capH), budget.ToString("F1") + " budget", captionStyle);
+            GUI.Label(new Rect(labelX, plot.yMax - capH, labelW, capH), "0", captionStyle);
             GUI.Label(new Rect(r.xMin + 6f * s, plot.yMax + 3f * s, r.width - 12f * s, capH),
-                "frame ms, last " + FrameMetrics.WindowSize + " frames   (blue = simulation, red = over budget)", captionStyle);
+                "frame ms · last " + FrameMetrics.WindowSize + " frames · blue = simulation · red = over budget", captionStyle);
         }
 
         private static void Quad(float x0, float y0, float x1, float y1, Color color)
@@ -216,7 +214,7 @@ namespace FrameBudget
             if (stylesReady) return;
 
             boxTexture = new Texture2D(1, 1, TextureFormat.RGBA32, false) { hideFlags = HideFlags.HideAndDontSave };
-            boxTexture.SetPixel(0, 0, new Color(0f, 0f, 0f, 0.72f));
+            boxTexture.SetPixel(0, 0, new Color(0f, 0f, 0f, 0.88f));
             boxTexture.Apply();
 
             monoFont = Font.CreateDynamicFontFromOSFont(new[] { "Consolas", "Menlo", "DejaVu Sans Mono", "Courier New" }, 19);

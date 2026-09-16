@@ -130,7 +130,7 @@ namespace FrameBudget
             frameCounter = 0;
             measured = 0;
             stepCount = 0;
-            Status = "BENCHMARK  " + agents + " agents   run " + (run + 1) + "/" + config.runsPerAgentCount + "   warm-up (" + warmupFrames + " frames)";
+            Status = "BENCHMARK · " + agents + " agents · run " + (run + 1) + "/" + config.runsPerAgentCount + " · warm-up " + warmupFrames + " frames";
         }
 
         /// <summary>Feed every frame's sample, right after it is taken and before the frame's simulation work.</summary>
@@ -144,7 +144,7 @@ namespace FrameBudget
                     {
                         phase = Phase.Measure;
                         droppedAtStart = driver.DroppedSimulationSeconds;
-                        Status = "BENCHMARK  " + sweep[sweepIndex] + " agents   run " + (run + 1) + "/" + config.runsPerAgentCount + "   measuring " + frameMs.Length + " frames";
+                        Status = "BENCHMARK · " + sweep[sweepIndex] + " agents · run " + (run + 1) + "/" + config.runsPerAgentCount + " · measuring " + frameMs.Length + " frames";
                     }
                     break;
 
@@ -274,12 +274,12 @@ namespace FrameBudget
                 FramesPath = Path.Combine(dir, baseName + "_frames.csv");
                 File.WriteAllText(SummaryPath, summary.ToString(), new UTF8Encoding(false));
                 File.WriteAllText(FramesPath, frames.ToString(), new UTF8Encoding(false));
-                Status = "BENCHMARK FINISHED  ->  " + SummaryPath;
+                Status = "BENCHMARK DONE · " + SummaryPath;
                 Debug.Log("[FrameBudget] Benchmark complete.\n[FrameBudget] Summary CSV:   " + SummaryPath + "\n[FrameBudget] Per-frame CSV: " + FramesPath);
             }
             catch (Exception e) when (e is IOException || e is UnauthorizedAccessException)
             {
-                Status = "BENCHMARK FAILED TO WRITE CSV: " + e.Message;
+                Status = "BENCHMARK FAILED · could not write CSV: " + e.Message;
                 Debug.LogError("[FrameBudget] Could not write benchmark CSV: " + e.Message);
                 exitCode = 1;
             }
