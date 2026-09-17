@@ -168,6 +168,8 @@ def load_points(csv_paths: list[Path], allow_editor: bool) -> tuple[list[Point],
         ("fixed_timestep_s", "a different timestep is a different workload"),
         ("max_steps_per_frame", "a different step cap is a different workload"),
         ("measured_frames", "percentiles over different window lengths are not comparable"),
+        ("stepping_mode", "rows stepped under different rules measure different amounts of work per frame"),
+        ("allocation_source", "allocation figures from different counters mean different things"),
     ):
         values = {r.get(column) for r in eligible if r.get(column) is not None}
         if len(values) > 1:

@@ -7,6 +7,21 @@ ad-hoc runs do not land in the repository by accident.
 
 The measurement protocol these files follow is `docs/METHOD.md`. Read it before quoting a number.
 
+## Superseded files
+
+**`benchmark_BaselineSweep_20260917_044713*` and `benchmark_CrossingSweep_20260917_051816*` are
+superseded and must not be combined with anything newer.** They were taken under the day-2 stepping
+rule, where the simulation stepped only when an accumulator said real time had elapsed. Under that
+rule a light configuration ran no step in most frames, so its frame time is not the cost of
+simulating those agents, and runs executed differing step counts. Day 3 changed benchmark mode to
+step exactly once per frame (`docs/METHOD.md` §3), which makes frame cost and step cost describe the
+same work in every row.
+
+They are kept because deleting measurements because a later method is better is how a results
+directory stops being evidence. Every row carries `stepping_mode`, so the two generations are
+distinguishable without reading this file, and the table generator refuses to mix rows that disagree
+on the columns that make them comparable.
+
 Each run produces two files that share a base name, `benchmark_<config>_<UTC timestamp>`:
 
 ## `benchmark_<config>_<stamp>.csv` — the summary

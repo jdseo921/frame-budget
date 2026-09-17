@@ -87,22 +87,34 @@ so that *only* the cost of doing it can vary.
 `Time.unscaledDeltaTime` rather than `Time.deltaTime`, so that `Time.timeScale` cannot scale the
 workload.
 
-**The step cap.** `SimConfig.maxStepsPerFrame` (default **1**) bounds how many steps a single frame
-may run. Without a cap, a frame that takes longer than the timestep accumulates a debt it then tries
-to repay by running more steps next frame, which takes longer still: the classic spiral of death,
-in which a heavy configuration never completes a run. With the cap at 1, a frame always means "at
-most one 60 Hz simulation step, plus rendering" — which is exactly the quantity the 16.7 ms question
-is asking about.
+**Benchmark stepping: exactly one step per frame.** *(Changed on day 3. Results taken before that
+change are not comparable with results taken after it, and `stepping_mode` in every row says which
+rule produced it.)*
 
-When the cap is hit, the simulated time that could not be run is **counted, not hidden**:
+In benchmark mode the simulation runs **exactly one fixed-timestep step per frame,
+unconditionally**, with no reference to wall-clock time. A benchmark wants a fixed amount of work
+per frame so that frame cost and step cost describe the same thing in every row. Keeping up with
+real time is a game's concern, and while it was in the measured path it distorted the results three
+ways:
 
-- `capped_frames` — how many measured frames hit the cap.
-- `dropped_sim_seconds` — how much simulated time was discarded because of it.
+- Below roughly 1,500 agents the simulation kept up, so most frames ran **no step at all** and
+  `frame_ms_median` described a frame that did no simulation work. The statistic tracked the ratio
+  of stepping to non-stepping frames rather than the cost of the work.
+- Above that, the accumulator's cap discarded simulated time by the minute, because the simulation
+  could not keep pace with real time and was never going to.
+- Runs of the same configuration executed **different numbers of steps**, so `state_hash` was
+  comparable only where the cap saturated and pinned the count — that is, only where the simulation
+  was slowest. Determinism went unverified exactly where it was cheapest to verify.
 
-A row with a high `capped_frames` is a row where the simulation is running slower than real time.
-That is a true and interesting fact about that agent count, and it is reported rather than absorbed.
-It also means the simulation in such a run advances less far in wall-clock terms than in a run that
-kept up — which matters for the reproducibility check in §7.
+With one step per frame, a run of `measured_frames` frames executes exactly that many steps at every
+agent count, so `state_hash` is comparable everywhere and `capped_frames` and `dropped_sim_seconds`
+are always zero in benchmark rows.
+
+**Interactive play keeps the accumulator**, because there it is the right behaviour: frame time
+decides how many steps run, `SimConfig.maxStepsPerFrame` (default 1) bounds them so a slow frame
+cannot spiral into an ever-longer one, and the simulated time the cap drops is counted into
+`capped_frames` and `dropped_sim_seconds` rather than hidden. Those two columns remain meaningful
+for interactive rows and are structurally zero for benchmark rows.
 
 ## 4. Warm-up
 

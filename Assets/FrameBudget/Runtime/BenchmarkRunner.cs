@@ -22,7 +22,7 @@ namespace FrameBudget
             "timestamp_utc," + RunEnvironment.CsvHeader + "," +
             "vsync_count,target_frame_rate,run_in_background,display_refresh_hz," +
             "config,agent_count,run,techniques,spatialHash,zeroAlloc,tickBudget,gpuInstancing,burstJobs," +
-            "seed,fixed_timestep_s,max_steps_per_frame,warmup_frames,measured_frames," +
+            "seed,fixed_timestep_s,stepping_mode,max_steps_per_frame,warmup_frames,measured_frames," +
             "steps_in_window,sim_steps_total,capped_frames,dropped_sim_seconds," +
             "frame_ms_median,frame_ms_p95,main_thread_ms_median,main_thread_ms_p95,sim_ms_per_frame_median,sim_ms_per_frame_p95," +
             "step_ms_median,step_ms_p95,present_ms_median,present_ms_p95,other_ms_median,other_ms_p95," +
@@ -59,6 +59,8 @@ namespace FrameBudget
         private int measured;
         private int stepCount;
         private double droppedAtStart;
+
+
 
         private readonly StringBuilder summary = new StringBuilder();
         private readonly StringBuilder frames = new StringBuilder();
@@ -251,6 +253,7 @@ namespace FrameBudget
                    .Append(config.burstJobs ? 1 : 0).Append(',')
                    .Append(config.seed).Append(',')
                    .Append(config.fixedTimestep.ToString("R", CultureInfo.InvariantCulture)).Append(',')
+                   .Append(Q(driver.SteppingMode)).Append(',')
                    .Append(config.maxStepsPerFrame).Append(',')
                    .Append(warmupFrames).Append(',')
                    .Append(measured).Append(',')

@@ -55,8 +55,14 @@ namespace FrameBudget
         /// <summary>Frames since the last spawn in which the step cap stopped the simulation from catching up with real time.</summary>
         public int StepCapHitFrames { get; private set; }
 
-        /// <summary>Simulated seconds dropped by the step cap since the last spawn. Non-zero means the simulation is running slower than real time.</summary>
+        /// <summary>Simulated seconds dropped by the step cap since the last spawn. Non-zero means the simulation is running slower than real time. Always zero under benchmark stepping, which does not pace itself.</summary>
         public double DroppedSimulationSeconds { get; private set; }
+
+        public const string BenchmarkSteppingMode = "fixed-one-step-per-frame";
+        public const string InteractiveSteppingMode = "realtime-accumulator-capped";
+
+        /// <summary>Which stepping rule is in force; recorded in every CSV row so rows taken under different rules are never compared.</summary>
+        public string SteppingMode => benchmark != null && benchmark.IsRunning ? BenchmarkSteppingMode : InteractiveSteppingMode;
 
         private void Awake()
         {
@@ -113,6 +119,7 @@ namespace FrameBudget
         private void Start()
         {
             if (!enabled) return;
+
             if (BenchmarkLaunch.TryGetRequest(out string configName))
             {
                 SimConfig cfg = ResolveConfig(configName);
@@ -136,37 +143,48 @@ namespace FrameBudget
                 pendingAgentCount = -1;
             }
 
-            // 3. Fixed-timestep simulation. Frame time only decides HOW MANY steps run; it never
-            //    sizes a step, so the work done per step is the same at 30 fps and at 300 fps.
-            //    Unscaled so timeScale cannot slow the workload down. Steps per frame are capped:
-            //    the simulated time the cap leaves behind is counted and shown, not hidden.
+            // 3. Simulation. The step itself is always the same fixed dt; only the decision of how
+            //    many steps a frame runs differs between the two modes.
             float dt = config.fixedTimestep;
-            accumulator += Time.unscaledDeltaTime;
             int steps = 0;
             double simMs = 0.0;
-            while (accumulator >= dt && steps < config.maxStepsPerFrame)
-            {
-                stopwatch.Restart();
-                using (SimulationStepMarker.Auto())
-                {
-                    NaiveSimulationStep.Step(world, config, dt);
-                }
-                stopwatch.Stop();
-
-                double stepMs = stopwatch.Elapsed.TotalMilliseconds;
-                metrics.RecordStep(stepMs);
-                benchmark.RecordStep(stepMs);
-                simMs += stepMs;
-                accumulator -= dt;
-                steps++;
-            }
             bool capHit = false;
-            if (accumulator >= dt)
+
+            if (benchmark.IsRunning)
             {
-                capHit = true;
-                StepCapHitFrames++;
-                DroppedSimulationSeconds += accumulator - dt;
-                accumulator = dt;   // keep exactly one step of debt so the next frame steps immediately
+                // BENCHMARK STEPPING: exactly one step per frame, unconditionally, with no reference
+                // to wall-clock time. A benchmark wants a fixed amount of work per frame; keeping up
+                // with real time is a game concern, and having it in the measured path is what made
+                // day 2's results hard to read. Below about 1,500 agents most frames ran no step at
+                // all, so frame_ms_median described a frame that did no simulation work and moved
+                // with the step ratio rather than the cost; runs of the same configuration executed
+                // different numbers of steps, which left state_hash uncomparable exactly where the
+                // simulation was fastest; and the heavy configurations discarded simulated time by
+                // the minute. One step per frame removes all three at once: every run of
+                // measured_frames frames executes exactly measured_frames steps, so frame_ms and
+                // step_ms describe the same work and state_hash is comparable everywhere.
+                simMs = StepOnce(dt);
+                steps = 1;
+                accumulator = 0.0;   // pacing debt is meaningless here and must not leak into interactive mode
+            }
+            else
+            {
+                // INTERACTIVE: real-time pacing, capped, with the simulated time the cap drops
+                // counted rather than hidden. Unscaled so timeScale cannot resize the workload.
+                accumulator += Time.unscaledDeltaTime;
+                while (accumulator >= dt && steps < config.maxStepsPerFrame)
+                {
+                    simMs += StepOnce(dt);
+                    accumulator -= dt;
+                    steps++;
+                }
+                if (accumulator >= dt)
+                {
+                    capHit = true;
+                    StepCapHitFrames++;
+                    DroppedSimulationSeconds += accumulator - dt;
+                    accumulator = dt;   // keep exactly one step of debt so the next frame steps immediately
+                }
             }
 
             // 4. Present (naive GameObject path; timed separately from the simulation).
@@ -200,6 +218,22 @@ namespace FrameBudget
             presenter?.Dispose();
             metrics?.Dispose();
             hud?.Dispose();
+        }
+
+        /// <summary>Runs one simulation step and returns its cost in milliseconds, recording it with both the HUD window and the benchmark.</summary>
+        private double StepOnce(float dt)
+        {
+            stopwatch.Restart();
+            using (SimulationStepMarker.Auto())
+            {
+                NaiveSimulationStep.Step(world, config, dt);
+            }
+            stopwatch.Stop();
+
+            double stepMs = stopwatch.Elapsed.TotalMilliseconds;
+            metrics.RecordStep(stepMs);
+            benchmark.RecordStep(stepMs);
+            return stepMs;
         }
 
         /// <summary>Respawns with a new agent count at the start of the next frame.</summary>
