@@ -242,6 +242,65 @@ if the grid had returned a pooled buffer, this sweep would have measured the spa
 allocation fix together and neither could have been attributed. Removing the allocation is day 4's
 job, and the interaction between the two is worth more than either alone.
 
+### Day 4: zeroAlloc, instancing, and a technique that was allocating
+
+**The two techniques overlap almost completely, and the arithmetic is worth seeing.** At 10,000
+agents the baseline frame is 670.95 ms. The spatial hash alone saves 654.27 ms; removing allocation
+alone saves 599.51 ms. Those sum to 1,253.78 ms of saving against a frame that only contains 670.95,
+and the two together actually save 661.11. Almost 593 ms — ninety-five per cent of the smaller win —
+is the same milliseconds counted twice.
+
+This is not a disappointment, it is the expected shape, and it is the reason the matrix was worth
+running rather than assuming the deltas add. Both techniques attack the same quantity: the per-agent
+neighbour query. The spatial hash makes the query examine a handful of candidates instead of ten
+thousand; removing allocation makes each examination cheaper and stops the collector running. Once
+the hash has cut the work by fifty-fold there is very little allocation left to remove, and once the
+allocation is gone the scan is much cheaper to do exhaustively. Neither is worth much *after* the
+other, and reporting "32× from one and 9× from the other" as though they compose would be a
+straightforward lie about a 109× result.
+
+The honest framing is that the techniques are substitutes for most of their value and complements
+only at the margin — the combined 9.84 ms beats the better of the two alone (16.68 ms) by a real but
+much smaller amount than either headline delta suggests.
+
+**The matrix caught the zeroAlloc technique allocating.** The first run showed the brute-force path
+holding 0.08 collections per frame at every agent count, and the grid path rising from 0.17 at 1,000
+agents to 1.67 at 10,000, with bytes per frame scaling 102 KB to 725 KB. An allocation proportional
+to the number of queries, sitting inside the technique whose entire claim is that it does not
+allocate — and it would have shipped, because the configuration still looked fast and the collection
+count was still far below the baseline's 11.
+
+The two paths differ in one line: the grid sorts its gathered candidates, the brute-force scan is
+already ascending. `Array.Sort` allocates on every call on this runtime. Replacing it with an
+insertion sort over the buffer range removed the allocation *and* made the configuration
+substantially faster — 10,000 agents went from 12.57 ms to 9.84 ms, and the step from 7.49 ms to
+4.63 ms. A general-purpose sort was doing partitioning work on lists of about a dozen items.
+
+What makes this the day's most useful lesson: the bug was invisible to every check except the one
+that compared two cells of a matrix which differed by a single flag. Timing alone said the
+configuration was fast. The equivalence tests passed, because the sort was correct. Only running the
+full cross-product and noticing that one cell allocated where its neighbour did not exposed it.
+
+**Instancing confirmed day 3's SetPass model rather than merely agreeing with it.** Day 3 concluded
+SetPass counts renderer batch groups rather than draw calls, from an experiment that changed batching
+without changing SetPass. Instancing is the converse experiment: collapse the batch groups and
+SetPass must collapse too. It does — 9,472 batches to 21, and 108 SetPass calls to 9 — and, more
+tellingly, it stops growing with agent count. Draw calls are 21 at every agent count from 1,000 to
+24,000. A constant is a different kind of number from a small one.
+
+**The presentation cost that instancing removed was mostly not the position writes.** Present time
+fell from 0.509 ms to 0.100 ms at 10,000 agents, so only about 0.4 ms of the 2.5 ms the technique
+saved was in the loop it replaced. The rest was what the engine did afterwards with ten thousand
+renderers: culling them, sorting them, and submitting them one at a time.
+
+**Two sweeps of the same configuration disagreed by eighteen per cent, and the reason was heat.**
+spatialHash+zeroAlloc at 10,000 agents measures 9.84 ms in the technique matrix and 11.61 ms in the
+instancing sweep, which ran immediately after it on a machine that had been at full load for
+thirty-five minutes. Within each sweep the interleaving makes the comparison sound; across sweeps it
+does not. That is why the README headline states two measured numbers and their sources rather than
+dividing them into a speed-up ratio — a ratio spanning those two sweeps would carry the thermal
+difference silently inside it.
+
 ### Things I do not trust from today
 
 > **Correction, 2026-09-18 (day 4).** "Not credible" was too strong, and the direction of the error
