@@ -123,6 +123,16 @@ Three columns deserve a note.
 
 <!-- BUDGET_CROSSING:END -->
 
+## Future work
+
+Two techniques this project originally sketched are not implemented. The reasons are worth stating precisely, because "there was no time" and "it would have broken the thing that makes the other numbers trustworthy" are very different admissions.
+
+**Tick budgeting** — updating a fraction of the agents each step rather than all of them — is absent because it cannot satisfy the acceptance criterion everything else here is held to. Every technique has to produce a bit-identical `state_hash` to its control, and that criterion is what turns "it got faster" into "the cost changed and the result did not". Time-slicing deliberately changes what the simulation computes: an agent updated every fourth step follows a different trajectory, and no amount of care makes those floats match. Measuring it honestly would need a different correctness framework altogether — bounding how far trajectories may diverge over how long, and deciding what divergence is acceptable for a crowd — and that framework is a larger piece of work than the optimisation it would license. Adding it under the current rules would have meant either a false equivalence claim or a silent exception to the one rule the project actually enforces.
+
+**Burst parallelisation** is the obvious next step, and the groundwork is already done rather than merely intended: `com.unity.burst`, `com.unity.collections` and `com.unity.mathematics` have been in the manifest since day 1, agent state is already parallel arrays of structs rather than objects, and the step is already two-phase and order-independent — it reads the previous step's state and writes into a separate buffer, which is the shape `IJobParallelFor` wants. The honest reason it is absent is time. It would also be the first technique where bit-identical output does not come for free: parallel reduction of a float sum depends on partition order, so the separation accumulation would need the same ascending-index discipline the spatial hash already follows, applied across threads rather than within one.
+
+The measurements say where the remaining cost is. At 18,000 agents the frame is 14.21 ms, of which the simulation step is 12.65 ms and presentation is 0.10 ms. Rendering is no longer worth attacking. The step is — and it is single-threaded on a sixteen-thread machine.
+
 ## Not in scope
 
 No pathfinding (steering and goals only), no full DOTS/Entities conversion, no gameplay, no menus, no art, no custom shaders, no second scene, and no test suite beyond the single smoke test that proves the harness runs.
