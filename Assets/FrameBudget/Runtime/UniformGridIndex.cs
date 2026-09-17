@@ -175,8 +175,38 @@ namespace FrameBudget
                 }
             }
 
-            Array.Sort(buffer, 0, count);
+            InsertionSort(buffer, count);
             return count;
+        }
+
+        /// <summary>
+        /// Sorts the first <paramref name="count"/> entries ascending, in place and without
+        /// allocating.
+        ///
+        /// This replaced Array.Sort, which turned out to allocate on every call on this runtime.
+        /// The evidence was in the matrix sweep: with zeroAlloc on, the brute-force path - identical
+        /// except that it needs no sort - held 0.08 collections per frame at every agent count,
+        /// while the grid path rose from 0.17 to 1.67 as agents went from 1,000 to 10,000. An
+        /// allocation that scales with the number of queries, in the one method the two paths do not
+        /// share.
+        ///
+        /// Insertion sort is not a compromise here. A neighbourhood holds a handful of agents at
+        /// these densities, and for inputs that small it beats any general-purpose sort outright,
+        /// having no partitioning, no recursion and no setup at all.
+        /// </summary>
+        private static void InsertionSort(int[] buffer, int count)
+        {
+            for (int i = 1; i < count; i++)
+            {
+                int value = buffer[i];
+                int j = i - 1;
+                while (j >= 0 && buffer[j] > value)
+                {
+                    buffer[j + 1] = buffer[j];
+                    j--;
+                }
+                buffer[j + 1] = value;
+            }
         }
 
         private int CellOf(Vector3 position)
