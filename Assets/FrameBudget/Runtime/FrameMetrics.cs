@@ -91,6 +91,15 @@ namespace FrameBudget
         public readonly RollingWindow PresentMs = new RollingWindow(WindowSize);
         public readonly RollingWindow OtherMs = new RollingWindow(WindowSize);
         public readonly RollingWindow GcBytes = new RollingWindow(WindowSize);
+
+        /// <summary>
+        /// Gen-0 collections per frame. Unlike <see cref="GcBytes"/> this is measurable in every
+        /// frame however heavy the allocation is - a frame in which a collection ran has a heap
+        /// delta that is not allocation, so its byte figure is discarded, but the collection itself
+        /// is still counted. It is also the quantity that costs frame time, since a collection is a
+        /// pause. That makes it the primary allocation metric and bytes the supporting detail.
+        /// </summary>
+        public readonly RollingWindow CollectionsPerFrame = new RollingWindow(WindowSize);
         public readonly RollingWindow DrawCalls = new RollingWindow(WindowSize);
         public readonly RollingWindow SetPassCalls = new RollingWindow(WindowSize);
         public readonly RollingWindow Batches = new RollingWindow(WindowSize);
@@ -235,6 +244,7 @@ namespace FrameBudget
                 if (GcAllocatedValid)
                 {
                     CollectionsObserved += s.GcCollections;
+                    CollectionsPerFrame.Add(s.GcCollections);
                     if (s.GcAllocatedBytes >= 0) GcBytes.Add(s.GcAllocatedBytes);
                     else FramesWithCollection++;
                 }
@@ -261,6 +271,7 @@ namespace FrameBudget
             PresentMs.Clear();
             OtherMs.Clear();
             GcBytes.Clear();
+            CollectionsPerFrame.Clear();
             DrawCalls.Clear();
             SetPassCalls.Clear();
             Batches.Clear();

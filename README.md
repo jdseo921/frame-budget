@@ -8,7 +8,7 @@ A single-scene Unity benchmark that simulates a crowd of simple steering agents 
 - **The naive baseline.** Agent state lives in parallel arrays of structs, not in per-agent MonoBehaviours. In benchmark mode the simulation runs exactly one fixed-timestep step per frame, so frame cost and step cost describe the same work in every row. Everything else is deliberately unoptimised and labelled as such in the code: an all-pairs neighbour query, one GameObject per agent, `GetComponent` inside the per-agent loop, LINQ in the hot path, and HUD text rebuilt by string concatenation every frame. Each of these is a control condition that a later technique removes.
 - **The techniques.** Each is a runtime flag measured against its own control inside a single sweep, interleaved with it, so a comparison never spans a thermal ramp. A technique that alters the simulation's arithmetic must produce a **bit-identical** `state_hash` to its control at the same seed and step count: a faster neighbour query that returns a different set of neighbours is not an optimisation but a different simulation, and it fails flatteringly, so timing alone cannot be the acceptance test. Implemented so far: **spatialHash**, a uniform grid replacing the all-pairs scan. Still to come: zeroAlloc, tickBudget, gpuInstancing, burstJobs.
 - **The HUD.** IMGUI, sized to be readable in a screen recording, drawn in its own column beside the world view rather than over it: agent count, simulation time, frame time, GC per frame, draw calls, SetPass calls, and a rolling frame-time graph with the sixty-frames-per-second budget drawn across it.
-- **The benchmark mode.** Sweeps agent counts from a `SimConfig` asset, discards warm-up frames, records the measured frames and writes two CSVs â€” a summary with medians and tails per (agent count, technique combination, run), and every measured frame so the summary can be audited. Runs of a configuration are interleaved rather than blocked, so thermal drift on a laptop spreads across configurations instead of landing on one. `-frameBudgetOutput <dir>` sends them into `results/`; without it they go to `Application.persistentDataPath`. Before measuring anything it asserts that vsync and the frame cap are off, and aborts the run rather than reporting numbers that describe the display.
+- **The benchmark mode.** Sweeps agent counts from a `SimConfig` asset, discards warm-up frames, records the measured frames and writes two CSVs — a summary with medians and tails per (agent count, technique combination, run), and every measured frame so the summary can be audited. Runs of a configuration are interleaved rather than blocked, so thermal drift on a laptop spreads across configurations instead of landing on one. `-frameBudgetOutput <dir>` sends them into `results/`; without it they go to `Application.persistentDataPath`. Before measuring anything it asserts that vsync and the frame cap are off, and aborts the run rather than reporting numbers that describe the display.
 
 ## Running it
 
@@ -47,18 +47,18 @@ Every cell below is filled from the benchmark CSV by `tools/update_readme_table.
 
 <!-- RESULTS_TABLE:BEGIN -->
 
-| Agents | Techniques | Runs | Frame ms (median) | Frame ms (run spread) | Frame ms (p95) | Sim step ms (median) | Sim step ms (p95) | GC alloc / frame | Draw calls | SetPass calls |
-|-------:|------------|-----:|------------------:|:----------------------|---------------:|---------------------:|--------------------:|-----------------:|-----------:|--------------:|
-| 1,000 | baseline | 5 | 8.87 | 7.82 â€“ 8.98 | 11.19 | 7.09 | 9.05 | 228.0 KB | 1,015 | 18 |
-| 2,000 | baseline | 5 | 30.23 | 27.22 â€“ 32.84 | 33.82 | 27.76 | 31.07 |  | 2,006 | 28 |
-| 5,000 | baseline | 5 | 171.89 | 166.00 â€“ 181.61 | 178.45 | 167.81 | 173.61 |  | 4,980 | 58 |
-| 10,000 | baseline | 5 | 664.54 | 644.39 â€“ 673.77 | 678.19 | 657.63 | 672.48 |  | 9,917 | 108 |
-| 1,000 | spatialHash | 5 | 1.84 | 1.76 â€“ 1.86 | 2.47 | 0.22 | 0.63 | 124.0 KB | 1,014 | 18 |
-| 2,000 | spatialHash | 5 | 2.91 | 2.80 â€“ 3.09 | 3.59 | 0.91 | 1.17 | 324.0 KB | 2,008 | 28 |
-| 5,000 | spatialHash | 5 | 6.89 | 6.69 â€“ 7.12 | 8.01 | 3.48 | 4.20 |  | 4,989 | 58 |
-| 10,000 | spatialHash | 5 | 16.81 | 15.88 â€“ 17.12 | 20.61 | 11.29 | 14.27 |  | 9,955 | 108 |
+| Agents | Techniques | Runs | Frame ms (median) | Frame ms (run spread) | Frame ms (p95) | Sim step ms (median) | GC collections / frame | GC alloc / frame | Draw calls | SetPass calls |
+|-------:|------------|-----:|------------------:|:----------------------|---------------:|---------------------:|-----------------------:|-----------------:|-----------:|--------------:|
+| 1,000 | baseline | 5 | 8.87 | 7.82 – 8.98 | 11.19 | 7.09 | 0.89 | 228.0 KB | 1,015 | 18 |
+| 2,000 | baseline | 5 | 30.23 | 27.22 – 32.84 | 33.82 | 27.76 | 1.76 |  | 2,006 | 28 |
+| 5,000 | baseline | 5 | 171.89 | 166.00 – 181.61 | 178.45 | 167.81 | 5.65 |  | 4,980 | 58 |
+| 10,000 | baseline | 5 | 664.54 | 644.39 – 673.77 | 678.19 | 657.63 | 13.06 |  | 9,917 | 108 |
+| 1,000 | spatialHash | 5 | 1.84 | 1.76 – 1.86 | 2.47 | 0.22 | 0.41 | 124.0 KB | 1,014 | 18 |
+| 2,000 | spatialHash | 5 | 2.91 | 2.80 – 3.09 | 3.59 | 0.91 | 0.89 | 324.0 KB | 2,008 | 28 |
+| 5,000 | spatialHash | 5 | 6.89 | 6.69 – 7.12 | 8.01 | 3.48 | 2.57 |  | 4,989 | 58 |
+| 10,000 | spatialHash | 5 | 16.81 | 15.88 – 17.12 | 20.61 | 11.29 | 6.63 |  | 9,955 | 108 |
 
-*Generated by `tools/update_readme_table.py` from `results/benchmark_SpatialHashSweep_20260917_083414.csv` â€” do not edit by hand.*
+*Generated by `tools/update_readme_table.py` from `results/benchmark_SpatialHashSweep_20260917_083414.csv` — do not edit by hand.*
 
 <!-- RESULTS_TABLE:END -->
 
@@ -78,13 +78,13 @@ Three columns deserve a note.
 
 **baseline**
 
-- **16.7 ms (60 fps)** â€” crossed between **1,000 agents** (8.87 ms) and **2,000 agents** (30.23 ms). The sweep does not sample between those two counts, so the exact crossing point is bracketed, not measured.
-- **33.3 ms (30 fps)** â€” crossed between **2,000 agents** (30.23 ms) and **5,000 agents** (171.89 ms). The sweep does not sample between those two counts, so the exact crossing point is bracketed, not measured.
+- **16.7 ms (60 fps)** — crossed between **1,000 agents** (8.87 ms) and **2,000 agents** (30.23 ms). The sweep does not sample between those two counts, so the exact crossing point is bracketed, not measured.
+- **33.3 ms (30 fps)** — crossed between **2,000 agents** (30.23 ms) and **5,000 agents** (171.89 ms). The sweep does not sample between those two counts, so the exact crossing point is bracketed, not measured.
 
 **spatialHash**
 
-- **16.7 ms (60 fps)** â€” crossed between **5,000 agents** (6.89 ms) and **10,000 agents** (16.81 ms). The sweep does not sample between those two counts, so the exact crossing point is bracketed, not measured.
-- **33.3 ms (30 fps)** â€” not crossed at any measured agent count. The largest measured point, 10,000 agents, has a median frame time of 16.81 ms.
+- **16.7 ms (60 fps)** — crossed between **5,000 agents** (6.89 ms) and **10,000 agents** (16.81 ms). The sweep does not sample between those two counts, so the exact crossing point is bracketed, not measured.
+- **33.3 ms (30 fps)** — not crossed at any measured agent count. The largest measured point, 10,000 agents, has a median frame time of 16.81 ms.
 
 <!-- BUDGET_CROSSING:END -->
 

@@ -107,6 +107,21 @@ class Point:
         values = [read_float(r, key) for r in self.rows]
         return [v for v in values if v is not None]
 
+    def collections_per_frame(self) -> float | None:
+        """Gen-0 collections per measured frame, the primary allocation metric.
+
+        Bytes per frame go blank exactly where allocation is heaviest, because a frame in which a
+        collection ran has a heap delta that is not allocation. This number is measured in every row
+        regardless, and it counts the thing that actually costs frame time: a collection is a pause.
+        """
+        per_run = []
+        for row in self.rows:
+            collections = read_float(row, "gc_collections_in_window")
+            frames = read_float(row, "measured_frames")
+            if collections is not None and frames:
+                per_run.append(collections / frames)
+        return median(per_run) if per_run else None
+
     def summary(self, key: str) -> tuple[float | None, float | None, float | None]:
         """(median across runs, min across runs, max across runs) of a per-run column."""
         values = self.per_run(key)
@@ -209,12 +224,12 @@ def load_points(csv_paths: list[Path], allow_editor: bool) -> tuple[list[Point],
 def build_table(points: list[Point], csv_name: str) -> str:
     header = (
         "| Agents | Techniques | Runs | Frame ms (median) | Frame ms (run spread) | "
-        "Frame ms (p95) | Sim step ms (median) | Sim step ms (p95) | GC alloc / frame | "
+        "Frame ms (p95) | Sim step ms (median) | GC collections / frame | GC alloc / frame | "
         "Draw calls | SetPass calls |"
     )
     rule = (
         "|-------:|------------|-----:|------------------:|:----------------------|"
-        "---------------:|---------------------:|--------------------:|-----------------:|"
+        "---------------:|---------------------:|-----------------------:|-----------------:|"
         "-----------:|--------------:|"
     )
     lines = [header, rule]
@@ -222,7 +237,7 @@ def build_table(points: list[Point], csv_name: str) -> str:
         frame_med, frame_lo, frame_hi = point.summary("frame_ms_median")
         frame_p95, _, _ = point.summary("frame_ms_p95")
         step_med, _, _ = point.summary("step_ms_median")
-        step_p95, _, _ = point.summary("step_ms_p95")
+        collections_med = point.collections_per_frame()
         gc_med, _, _ = point.summary("gc_alloc_bytes_median")
         draw_med, _, _ = point.summary("draw_calls_median")
         setpass_med, _, _ = point.summary("setpass_calls_median")
@@ -233,7 +248,7 @@ def build_table(points: list[Point], csv_name: str) -> str:
 
         lines.append(
             f"| {point.agents:,} | {point.techniques} | {len(point.rows)} | {fnum(frame_med)} | "
-            f"{spread} | {fnum(frame_p95)} | {fnum(step_med)} | {fnum(step_p95)} | "
+            f"{spread} | {fnum(frame_p95)} | {fnum(step_med)} | {fnum(collections_med)} | "
             f"{fbytes(gc_med)} | {fcount(draw_med)} | {fcount(setpass_med)} |"
         )
     lines.append("")

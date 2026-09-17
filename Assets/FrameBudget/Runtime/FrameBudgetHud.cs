@@ -27,6 +27,7 @@ namespace FrameBudget
         private static readonly Func<double, string> MsFormat = v => v.ToString("F2") + " ms";
         private static readonly Func<double, string> CountFormat = v => v.ToString("F0");
         private static readonly Func<double, string> BytesFormat = FormatBytes;
+        private static readonly Func<double, string> CollectionsFormat = v => v.ToString("F2");
 
         private static readonly Color ColumnBackground = new Color(0.04f, 0.04f, 0.05f, 1f);
         private static readonly Color PanelBackground = new Color(0.10f, 0.10f, 0.12f, 1f);
@@ -81,7 +82,8 @@ namespace FrameBudget
                  + Row("Sim step", m.StepMs, true, MsFormat)
                  + Row("Present", m.PresentMs, true, MsFormat)
                  + Row("Render+engine", m.OtherMs, true, MsFormat)
-                 + Row("GC / frame", m.GcBytes, m.GcAllocatedValid, BytesFormat)
+                 + Row("GC collect/fr", m.CollectionsPerFrame, m.GcAllocatedValid, CollectionsFormat)
+                 + Row("GC bytes/fr", m.GcBytes, m.GcAllocatedValid, BytesFormat)
                  + Row("Draw calls", m.DrawCalls, m.DrawCallsValid, CountFormat)
                  + Row("SetPass", m.SetPassCalls, m.SetPassCallsValid, CountFormat)
                  + "\n"
