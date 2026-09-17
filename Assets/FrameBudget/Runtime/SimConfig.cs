@@ -92,6 +92,18 @@ namespace FrameBudget
         public bool gpuInstancing;
         public bool burstJobs;
 
+        [Tooltip("Technique combinations the benchmark sweeps through. Leave empty to measure only the flags above. " +
+                 "Listing combinations here is what lets a technique be measured against its own control inside one run, " +
+                 "interleaved with it, instead of as a separate sweep whose thermal drift would land on the technique axis.")]
+        public TechniqueCombination[] techniqueSweep = Array.Empty<TechniqueCombination>();
+
+        /// <summary>The combinations to measure: the explicit sweep list, or this config's own flags when the list is empty.</summary>
+        public TechniqueCombination[] ResolveTechniqueSweep()
+        {
+            if (techniqueSweep != null && techniqueSweep.Length > 0) return (TechniqueCombination[])techniqueSweep.Clone();
+            return new[] { CurrentTechniques };
+        }
+
         public TechniqueCombination CurrentTechniques => new TechniqueCombination
         {
             spatialHash = spatialHash,

@@ -21,7 +21,7 @@ namespace FrameBudget
         public const string SummaryHeader =
             "timestamp_utc," + RunEnvironment.CsvHeader + "," +
             "vsync_count,target_frame_rate,run_in_background,display_refresh_hz," +
-            "config,agent_count,run,techniques,spatialHash,zeroAlloc,tickBudget,gpuInstancing,burstJobs," +
+            "config,agent_count,run,techniques,spatial_index,spatialHash,zeroAlloc,tickBudget,gpuInstancing,burstJobs," +
             "seed,fixed_timestep_s,stepping_mode,max_steps_per_frame,warmup_frames,measured_frames," +
             "steps_in_window,sim_steps_total,capped_frames,dropped_sim_seconds," +
             "gc_collections_in_window,frames_with_collection," +
@@ -43,6 +43,8 @@ namespace FrameBudget
         private FrameBudgetDriver driver;
         private int[] sweep = Array.Empty<int>();
         private int sweepIndex;
+        private TechniqueCombination[] combos = Array.Empty<TechniqueCombination>();
+        private int comboIndex;
         private int run;
         private int frameCounter;
         private int warmupFrames;
@@ -109,6 +111,7 @@ namespace FrameBudget
             config = cfg;
             driver = drv;
             sweep = cfg.sweepAgentCounts != null && cfg.sweepAgentCounts.Length > 0 ? (int[])cfg.sweepAgentCounts.Clone() : new[] { cfg.agentCount };
+            combos = cfg.ResolveTechniqueSweep();
             warmupFrames = Mathf.Max(1, cfg.warmupFrameCount);   // the spawn frame is never measured
             if (warmupFrames != cfg.warmupFrameCount) Debug.LogWarning("[FrameBudget] warmupFrameCount raised to 1 so the spawn frame is discarded.");
 
@@ -134,11 +137,13 @@ namespace FrameBudget
             startedUtc = DateTime.UtcNow;
             environmentRow = RunEnvironment.CsvRow();
             sweepIndex = 0;
+            comboIndex = 0;
             run = 0;
 
             driver.UseConfig(cfg);
             Debug.Log("[FrameBudget] Benchmark started: config='" + cfg.name + "' techniques=" + cfg.TechniqueLabel
                       + " sweep=[" + string.Join(",", sweep) + "] runs=" + cfg.runsPerAgentCount
+                      + " techniques=[" + string.Join(" | ", Array.ConvertAll(combos, c => c.Label)) + "]"
                       + " warmup=" + warmupFrames + " measured=" + m + " dt=" + cfg.fixedTimestep.ToString("R", CultureInfo.InvariantCulture)
                       + " maxSteps/frame=" + cfg.maxStepsPerFrame);
             Debug.Log("[FrameBudget] Environment: " + RunEnvironment.Describe());
@@ -158,6 +163,9 @@ namespace FrameBudget
         private void BeginPoint()
         {
             int agents = sweep[sweepIndex];
+            // The technique axis is interleaved with the agent-count axis, so a configuration is
+            // never measured five times in a row while the machine heats up. See docs/METHOD.md.
+            driver.SetTechniques(combos[comboIndex]);
             driver.RequestAgentCount(agents);
 
             // Start every point from a collected heap. The spawn frame and the warm-up frames are
@@ -172,7 +180,7 @@ namespace FrameBudget
             stepCount = 0;
             collectionsInWindow = 0;
             framesWithCollection = 0;
-            Status = "BENCHMARK · " + agents + " agents · run " + (run + 1) + "/" + config.runsPerAgentCount + " · warm-up " + warmupFrames + " frames";
+            Status = "BENCHMARK · " + combos[comboIndex].Label + " · " + agents + " agents · run " + (run + 1) + "/" + config.runsPerAgentCount + " · warm-up " + warmupFrames + " frames";
         }
 
         /// <summary>Feed every frame's sample, right after it is taken and before the frame's simulation work.</summary>
@@ -186,7 +194,7 @@ namespace FrameBudget
                     {
                         phase = Phase.Measure;
                         droppedAtStart = driver.DroppedSimulationSeconds;
-                        Status = "BENCHMARK · " + sweep[sweepIndex] + " agents · run " + (run + 1) + "/" + config.runsPerAgentCount + " · measuring " + frameMs.Length + " frames";
+                        Status = "BENCHMARK · " + combos[comboIndex].Label + " · " + sweep[sweepIndex] + " agents · run " + (run + 1) + "/" + config.runsPerAgentCount + " · measuring " + frameMs.Length + " frames";
                     }
                     break;
 
@@ -222,6 +230,7 @@ namespace FrameBudget
         private void FinishPoint()
         {
             int agents = sweep[sweepIndex];
+            TechniqueCombination combo = combos[comboIndex];
             int runNumber = run + 1;
             string configName = config.name;
             ulong stateHash = driver.World.StateHash();
@@ -273,12 +282,13 @@ namespace FrameBudget
                    .Append(Q(configName)).Append(',')
                    .Append(agents).Append(',')
                    .Append(runNumber).Append(',')
-                   .Append(Q(config.TechniqueLabel)).Append(',')
-                   .Append(config.spatialHash ? 1 : 0).Append(',')
-                   .Append(config.zeroAlloc ? 1 : 0).Append(',')
-                   .Append(config.tickBudget ? 1 : 0).Append(',')
-                   .Append(config.gpuInstancing ? 1 : 0).Append(',')
-                   .Append(config.burstJobs ? 1 : 0).Append(',')
+                   .Append(Q(combo.Label)).Append(',')
+                   .Append(Q(driver.ActiveIndexName)).Append(',')
+                   .Append(combo.spatialHash ? 1 : 0).Append(',')
+                   .Append(combo.zeroAlloc ? 1 : 0).Append(',')
+                   .Append(combo.tickBudget ? 1 : 0).Append(',')
+                   .Append(combo.gpuInstancing ? 1 : 0).Append(',')
+                   .Append(combo.burstJobs ? 1 : 0).Append(',')
                    .Append(config.seed).Append(',')
                    .Append(config.fixedTimestep.ToString("R", CultureInfo.InvariantCulture)).Append(',')
                    .Append(Q(driver.SteppingMode)).Append(',')
@@ -306,7 +316,7 @@ namespace FrameBudget
                    .Append(Q(metrics.InvalidCounters)).Append(',')
                    .Append(Q(metrics.AllocationSource)).Append('\n');
 
-            Debug.Log("[FrameBudget] " + agents + " agents, run " + runNumber + ": frame " + F(frameMed) + " / p95 " + F(frameP95)
+            Debug.Log("[FrameBudget] " + combo.Label + " · " + agents + " agents, run " + runNumber + ": frame " + F(frameMed) + " / p95 " + F(frameP95)
                       + " ms | step " + F(stepMed) + " / p95 " + F(stepP95) + " ms (" + stepCount + " steps in window, " + totalSteps + " since spawn, " + cappedFrames + " capped frames)"
                       + " | gc " + (metrics.GcAllocatedValid ? gcStats : "n/a") + " B | draw " + (metrics.DrawCallsValid ? drawStats : "n/a")
                       + " | state " + stateHash.ToString("X16"));
@@ -321,7 +331,12 @@ namespace FrameBudget
             if (sweepIndex >= sweep.Length)
             {
                 sweepIndex = 0;
-                run++;
+                comboIndex++;
+                if (comboIndex >= combos.Length)
+                {
+                    comboIndex = 0;
+                    run++;
+                }
             }
             if (run < config.runsPerAgentCount) BeginPoint();
             else Finish();
