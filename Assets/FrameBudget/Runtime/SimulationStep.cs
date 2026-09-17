@@ -12,11 +12,14 @@ namespace FrameBudget
     /// index's per-step rebuild happens inside the timed region, because a technique's setup cost is
     /// part of its cost.
     ///
+    /// Allocation is the second axis. With zeroAlloc off, the neighbour query returns a freshly
+    /// allocated list per agent per step; with it on, the same neighbours are written into a buffer
+    /// reused across every agent and every step. Both branches must visit identical indices in
+    /// identical order, because the acceptance criterion is a bit-identical simulation.
+    ///
     /// Everything else here is still deliberately naive, and each remaining control names the
     /// technique that will remove it:
     ///
-    /// CONTROL: a List&lt;int&gt; is allocated per agent per step by the neighbour query.
-    ///          Replaced by the zeroAlloc technique.
     /// CONTROL: every agent is integrated every step regardless of its tick bucket.
     ///          Replaced by the tickBudget technique.
     /// CONTROL: single-threaded managed loops over managed arrays throughout.
@@ -24,7 +27,7 @@ namespace FrameBudget
     /// </summary>
     public static class SimulationStep
     {
-        public static void Step(AgentWorld world, SimConfig config, float dt, ISpatialIndex index)
+        public static void Step(AgentWorld world, SimConfig config, float dt, ISpatialIndex index, in TechniqueCombination techniques)
         {
             int n = world.Count;
             Vector3[] positions = world.Positions;
@@ -48,6 +51,9 @@ namespace FrameBudget
             // Phase 1 - steering. Reads only the previous step's state and writes NextVelocities, so
             // the result does not depend on the order agents are visited in. That keeps the later
             // parallel versions comparable with this one instead of "different but probably fine".
+            int[] buffer = world.NeighbourBuffer;
+            bool zeroAlloc = techniques.zeroAlloc;
+
             for (int i = 0; i < n; i++)
             {
                 Vector3 pos = positions[i];
@@ -55,14 +61,31 @@ namespace FrameBudget
                 // Ascending index order is part of the ISpatialIndex contract: the sum below is a
                 // float accumulation, and float addition is not associative, so a different order is
                 // a different simulation rather than a different implementation of the same one.
-                List<int> neighbours = index.Query(world, i, radius);
-
+                // The two branches must therefore visit exactly the same indices in exactly the same
+                // order; that they do is what the bit-identical state_hash check verifies.
                 Vector3 separation = Vector3.zero;
-                for (int k = 0; k < neighbours.Count; k++)
+
+                if (zeroAlloc)
                 {
-                    Vector3 away = pos - positions[neighbours[k]];
-                    float distSq = Mathf.Max(away.sqrMagnitude, 1e-4f);
-                    separation += away / distSq;
+                    int count = index.QueryInto(world, i, radius, buffer);
+                    for (int k = 0; k < count; k++)
+                    {
+                        Vector3 away = pos - positions[buffer[k]];
+                        float distSq = Mathf.Max(away.sqrMagnitude, 1e-4f);
+                        separation += away / distSq;
+                    }
+                }
+                else
+                {
+                    // CONTROL: a List is allocated per agent per step, and the brute-force index
+                    //          builds it through a LINQ chain with a capturing closure.
+                    List<int> neighbours = index.Query(world, i, radius);
+                    for (int k = 0; k < neighbours.Count; k++)
+                    {
+                        Vector3 away = pos - positions[neighbours[k]];
+                        float distSq = Mathf.Max(away.sqrMagnitude, 1e-4f);
+                        separation += away / distSq;
+                    }
                 }
 
                 Vector3 toGoal = goals[i] - pos;

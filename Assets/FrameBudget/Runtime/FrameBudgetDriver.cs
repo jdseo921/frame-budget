@@ -222,7 +222,7 @@ namespace FrameBudget
             stopwatch.Restart();
             using (PresentMarker.Auto())
             {
-                presenter.Present(world);
+                presenter.Present(world, activeTechniques.zeroAlloc);
             }
             stopwatch.Stop();
 
@@ -317,7 +317,7 @@ namespace FrameBudget
             stopwatch.Restart();
             using (SimulationStepMarker.Auto())
             {
-                SimulationStep.Step(world, config, dt, ActiveIndex);
+                SimulationStep.Step(world, config, dt, ActiveIndex, in activeTechniques);
             }
             stopwatch.Stop();
 

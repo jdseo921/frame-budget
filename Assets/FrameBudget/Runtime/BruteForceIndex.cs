@@ -39,5 +39,28 @@ namespace FrameBudget
                 .Where(j => j != agentIndex && (positions[j] - pos).sqrMagnitude < radiusSq)
                 .ToList();
         }
+
+        /// <summary>
+        /// The same all-pairs scan with the LINQ removed: a plain indexed loop writing into the
+        /// caller's buffer. No closure, no iterator, no list, no allocation of any kind. The scan is
+        /// still O(n^2) - this is the zeroAlloc technique, not the spatialHash one - and it still
+        /// walks indices in ascending order, so the ordering contract holds by construction.
+        /// </summary>
+        public int QueryInto(AgentWorld world, int agentIndex, float radius, int[] buffer)
+        {
+            Vector3[] positions = world.Positions;
+            Vector3 pos = positions[agentIndex];
+            float radiusSq = radius * radius;
+            int n = world.Count;
+            int count = 0;
+
+            for (int j = 0; j < n; j++)
+            {
+                if (j == agentIndex) continue;
+                Vector3 delta = positions[j] - pos;
+                if (delta.sqrMagnitude < radiusSq) buffer[count++] = j;
+            }
+            return count;
+        }
     }
 }

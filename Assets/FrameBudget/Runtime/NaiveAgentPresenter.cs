@@ -18,6 +18,9 @@ namespace FrameBudget
         private GameObject root;
         private GameObject[] agents = Array.Empty<GameObject>();
 
+        /// <summary>Transforms cached at build time, used by the zeroAlloc path instead of a per-agent GetComponent.</summary>
+        private Transform[] transforms = Array.Empty<Transform>();
+
         public int Count => agents.Length;
 
         public NaiveAgentPresenter(Material material)
@@ -37,6 +40,7 @@ namespace FrameBudget
             Transform parent = root.transform;
 
             agents = new GameObject[count];
+            transforms = new Transform[count];
             for (int i = 0; i < count; i++)
             {
                 var go = new GameObject("Agent " + i);
@@ -54,21 +58,32 @@ namespace FrameBudget
                 renderer.motionVectorGenerationMode = MotionVectorGenerationMode.ForceNoMotion;
 
                 agents[i] = go;
+                transforms[i] = go.transform;
             }
         }
 
         /// <summary>Copies simulation positions into the per-agent Transforms.</summary>
-        public void Present(AgentWorld world)
+        public void Present(AgentWorld world, bool cachedLookup)
         {
             Vector3[] positions = world.Positions;
             int n = Math.Min(agents.Length, world.Count);
-            for (int i = 0; i < n; i++)
+
+            // CONTROL: one GameObject per agent and one Transform write per agent per frame, either
+            //          way. Replaced by the gpuInstancing technique, which draws straight from the
+            //          position array and never touches a Transform.
+            if (cachedLookup)
             {
-                // CONTROL: GetComponent inside the per-agent loop instead of a cached reference.
-                //          Replaced by the zeroAlloc technique (cached, lookup-free hot path).
-                // CONTROL: one GameObject per agent and one Transform write per agent per frame.
-                //          Replaced by the gpuInstancing technique (instanced draw straight from the position array).
-                agents[i].GetComponent<Transform>().position = positions[i];
+                Transform[] cached = transforms;
+                for (int i = 0; i < n; i++) cached[i].position = positions[i];
+            }
+            else
+            {
+                for (int i = 0; i < n; i++)
+                {
+                    // CONTROL: GetComponent inside the per-agent loop instead of a cached reference.
+                    //          Replaced by the zeroAlloc technique.
+                    agents[i].GetComponent<Transform>().position = positions[i];
+                }
             }
         }
 
@@ -77,6 +92,13 @@ namespace FrameBudget
             if (root != null) UnityEngine.Object.Destroy(root);
             root = null;
             agents = Array.Empty<GameObject>();
+            transforms = Array.Empty<Transform>();
+        }
+
+        /// <summary>Hides or shows the agent objects, so the instanced path can render without the naive one drawing the same agents twice.</summary>
+        public void SetVisible(bool visible)
+        {
+            if (root != null && root.activeSelf != visible) root.SetActive(visible);
         }
     }
 }

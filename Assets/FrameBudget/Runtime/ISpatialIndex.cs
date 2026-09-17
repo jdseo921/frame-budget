@@ -36,8 +36,21 @@ namespace FrameBudget
 
         /// <summary>
         /// Agents within <paramref name="radius"/> of agent <paramref name="agentIndex"/>, excluding
-        /// itself, in ascending index order.
+        /// itself, in ascending index order. Allocates a fresh list per call; this is the control
+        /// shape that the zeroAlloc technique replaces with <see cref="QueryInto"/>.
         /// </summary>
         List<int> Query(AgentWorld world, int agentIndex, float radius);
+
+        /// <summary>
+        /// The same neighbours, written into a caller-owned buffer instead of a new list, returning
+        /// how many were written. The buffer must hold at least <c>world.Count</c> entries.
+        ///
+        /// This must produce exactly what <see cref="Query"/> produces - the same indices in the
+        /// same ascending order - because the two are measured against each other and the
+        /// acceptance criterion is a bit-identical simulation. A buffer that is reused without the
+        /// count being respected is the classic way to break that, since stale entries from a
+        /// previous, longer query survive past the end of a shorter one.
+        /// </summary>
+        int QueryInto(AgentWorld world, int agentIndex, float radius, int[] buffer);
     }
 }

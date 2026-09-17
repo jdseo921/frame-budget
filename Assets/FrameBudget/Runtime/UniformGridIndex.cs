@@ -136,6 +136,49 @@ namespace FrameBudget
             return result;
         }
 
+        /// <summary>
+        /// The same query writing into a caller-owned buffer, with no list and no allocation.
+        /// Array.Sort over a range sorts in place and does not allocate, so the ascending-order
+        /// contract is met without giving the garbage back that the technique exists to remove.
+        /// Only the first <c>count</c> entries are meaningful; the caller must not read past it,
+        /// because entries beyond the count are whatever a previous, longer query left there.
+        /// </summary>
+        public int QueryInto(AgentWorld world, int agentIndex, float radius, int[] buffer)
+        {
+            Vector3[] positions = world.Positions;
+            Vector3 pos = positions[agentIndex];
+            float radiusSq = radius * radius;
+            int count = 0;
+
+            int cx = AxisCell(pos.x);
+            int cz = AxisCell(pos.z);
+            int ring = Mathf.Max(1, Mathf.CeilToInt(radius / cellSize));
+
+            int xMin = Mathf.Max(0, cx - ring);
+            int xMax = Mathf.Min(dimension - 1, cx + ring);
+            int zMin = Mathf.Max(0, cz - ring);
+            int zMax = Mathf.Min(dimension - 1, cz + ring);
+
+            for (int z = zMin; z <= zMax; z++)
+            {
+                int rowBase = z * dimension;
+                for (int x = xMin; x <= xMax; x++)
+                {
+                    int cell = rowBase + x;
+                    int end = cellStart[cell + 1];
+                    for (int k = cellStart[cell]; k < end; k++)
+                    {
+                        int j = cellItems[k];
+                        if (j == agentIndex) continue;
+                        if ((positions[j] - pos).sqrMagnitude < radiusSq) buffer[count++] = j;
+                    }
+                }
+            }
+
+            Array.Sort(buffer, 0, count);
+            return count;
+        }
+
         private int CellOf(Vector3 position)
         {
             return AxisCell(position.z) * dimension + AxisCell(position.x);

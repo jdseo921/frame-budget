@@ -34,6 +34,10 @@ namespace FrameBudget
         private static readonly Color Separator = new Color(0.35f, 0.35f, 0.40f, 1f);
 
         private string text = "";
+
+        /// <summary>Reused by the zeroAlloc path so that building the panel does not allocate.</summary>
+        private readonly System.Text.StringBuilder builder = new System.Text.StringBuilder(1024);
+
         private string agentCountField = "0";
         private readonly GUIContent content = new GUIContent();
 
@@ -65,6 +69,12 @@ namespace FrameBudget
         /// <summary>Rebuilds the HUD text. Called every frame from Update, in every mode, so the cost is always present and always measured.</summary>
         public void BuildText(FrameBudgetDriver d)
         {
+            if (d.ActiveTechniques.zeroAlloc)
+            {
+                BuildTextZeroAlloc(d);
+                return;
+            }
+
             FrameMetrics m = d.Metrics;
             SimConfig c = d.Config;
 
@@ -88,6 +98,120 @@ namespace FrameBudget
                  + Row("SetPass", m.SetPassCalls, m.SetPassCallsValid, CountFormat)
                  + "\n"
                  + (d.Benchmark.IsRunning || d.Benchmark.IsFinished ? d.Benchmark.Status : Controls);
+        }
+
+        /// <summary>
+        /// The same panel built without allocating: digits are written into a reused StringBuilder a
+        /// character at a time, and the finished text is only turned into a string when it differs
+        /// from the one already on screen. A frame in which no displayed value changed therefore
+        /// allocates nothing at all.
+        ///
+        /// One string per changed frame remains, because IMGUI takes a string and there is no way to
+        /// hand it a builder. That is roughly a kilobyte where the naive path produced dozens of
+        /// temporaries, and the measurement in results/ shows what it comes to.
+        /// </summary>
+        private void BuildTextZeroAlloc(FrameBudgetDriver d)
+        {
+            FrameMetrics m = d.Metrics;
+            SimConfig c = d.Config;
+
+            builder.Length = 0;
+            builder.Append("FRAME BUDGET · ").Append(d.ActiveTechniques.Label)
+                   .Append(" · Unity ").Append(Application.unityVersion)
+                   .Append(Application.isEditor ? " (Editor)" : " (Player)").Append('\n');
+
+            ZeroAllocText.AppendInt(builder, d.AgentCount);
+            builder.Append(" agents · seed ");
+            ZeroAllocText.AppendInt(builder, c.seed);
+            builder.Append(" · dt ");
+            ZeroAllocText.AppendFixed(builder, c.fixedTimestep * 1000f, 2);
+            builder.Append(" ms · ");
+            ZeroAllocText.AppendInt(builder, d.StepsLastFrame);
+            builder.Append(" step/frame\n");
+
+            if (d.StepCapHitFrames == 0)
+            {
+                builder.Append("real time: keeping up\n\n");
+            }
+            else
+            {
+                builder.Append("real time: behind ");
+                ZeroAllocText.AppendFixed(builder, d.DroppedSimulationSeconds, 1);
+                builder.Append(" s (");
+                ZeroAllocText.AppendInt(builder, d.StepCapHitFrames);
+                builder.Append(" capped frames)\n\n");
+            }
+
+            ZeroAllocText.AppendPadRight(builder, "", LabelWidth);
+            int mark = builder.Length;
+            builder.Append("median");
+            ZeroAllocText.RightAlignSince(builder, mark, ColumnChars);
+            mark = builder.Length;
+            builder.Append("p95");
+            ZeroAllocText.RightAlignSince(builder, mark, ColumnChars);
+            builder.Append('\n');
+
+            AppendRow("Frame", m.FrameMs, true, Unit.Milliseconds);
+            AppendRow("Main thread", m.MainThreadMs, m.MainThreadValid, Unit.Milliseconds);
+            AppendRow("Sim step", m.StepMs, true, Unit.Milliseconds);
+            AppendRow("Present", m.PresentMs, true, Unit.Milliseconds);
+            AppendRow("Render+engine", m.OtherMs, true, Unit.Milliseconds);
+            AppendRow("GC collect/fr", m.CollectionsPerFrame, m.GcAllocatedValid, Unit.Collections);
+            AppendRow("GC bytes/fr", m.GcBytes, m.GcAllocatedValid, Unit.Bytes);
+            AppendRow("Draw calls", m.DrawCalls, m.DrawCallsValid, Unit.Count);
+            AppendRow("SetPass", m.SetPassCalls, m.SetPassCallsValid, Unit.Count);
+
+            builder.Append('\n');
+            builder.Append(d.Benchmark.IsRunning || d.Benchmark.IsFinished ? d.Benchmark.Status : Controls);
+
+            // Only materialise a string when the panel actually changed.
+            if (!ZeroAllocText.ContentEquals(builder, text)) text = builder.ToString();
+        }
+
+        private enum Unit { Milliseconds, Bytes, Count, Collections }
+
+        private void AppendRow(string label, RollingWindow window, bool valid, Unit unit)
+        {
+            ZeroAllocText.AppendPadRight(builder, label, LabelWidth);
+            if (!valid)
+            {
+                builder.Append(NotResolved).Append('\n');
+                return;
+            }
+            AppendCell(window.Count == 0 ? double.NaN : window.Median, unit);
+            AppendCell(window.Count == 0 ? double.NaN : window.P95, unit);
+            builder.Append('\n');
+        }
+
+        private void AppendCell(double value, Unit unit)
+        {
+            int mark = builder.Length;
+            if (double.IsNaN(value))
+            {
+                builder.Append("--");
+            }
+            else
+            {
+                switch (unit)
+                {
+                    case Unit.Milliseconds:
+                        ZeroAllocText.AppendFixed(builder, value, 2);
+                        builder.Append(" ms");
+                        break;
+                    case Unit.Collections:
+                        ZeroAllocText.AppendFixed(builder, value, 2);
+                        break;
+                    case Unit.Bytes:
+                        if (value >= 1048576.0) { ZeroAllocText.AppendFixed(builder, value / 1048576.0, 2); builder.Append(" MB"); }
+                        else if (value >= 1024.0) { ZeroAllocText.AppendFixed(builder, value / 1024.0, 1); builder.Append(" KB"); }
+                        else { ZeroAllocText.AppendFixed(builder, value, 0); builder.Append(" B"); }
+                        break;
+                    default:
+                        ZeroAllocText.AppendFixed(builder, value, 0);
+                        break;
+                }
+            }
+            ZeroAllocText.RightAlignSince(builder, mark, ColumnChars);
         }
 
         private static string RealTime(FrameBudgetDriver d)
