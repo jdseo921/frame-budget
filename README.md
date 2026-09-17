@@ -30,16 +30,22 @@ Reading the summary CSV: `step_ms_*` is the cost of one simulation step and is t
 
 ## Results
 
-Every cell below is filled from the benchmark CSV. Nothing here is typed in by hand.
+Every cell below is filled from the benchmark CSV by `tools/update_readme_table.py`. Nothing here is typed in by hand. The measurement protocol is `docs/METHOD.md`; the raw CSVs are in `results/`.
 
-| Agents | Techniques | Frame ms (median) | Frame ms (tail) | Sim step ms (median) | Sim step ms (tail) | GC alloc / frame | Draw calls | SetPass calls |
-|-------:|------------|------------------:|----------------:|---------------------:|--------------------:|-----------------:|-----------:|--------------:|
-|        | baseline   |                   |                 |                      |                     |                  |            |               |
-|        | baseline   |                   |                 |                      |                     |                  |            |               |
-|        | baseline   |                   |                 |                      |                     |                  |            |               |
-|        | baseline   |                   |                 |                      |                     |                  |            |               |
+<!-- RESULTS_TABLE:BEGIN -->
 
-Machine, Unity version and configuration for each row are recorded in the CSV alongside the numbers.
+| Agents | Techniques | Runs | Frame ms (median) | Frame ms (run spread) | Frame ms (p95) | Sim step ms (median) | Sim step ms (p95) | GC alloc / frame | Draw calls | SetPass calls |
+|-------:|------------|-----:|------------------:|:----------------------|---------------:|---------------------:|--------------------:|-----------------:|-----------:|--------------:|
+
+<!-- RESULTS_TABLE:END -->
+
+"Median" is the median of the per-run medians and "run spread" is the minimum and maximum of those same per-run medians, so run-to-run variation is visible rather than averaged away. Machine, Unity version, scripting backend, render pipeline and the achieved frame-pacing settings for every row are recorded in the CSV alongside the numbers.
+
+### Where the frame budget is crossed
+
+<!-- BUDGET_CROSSING:BEGIN -->
+
+<!-- BUDGET_CROSSING:END -->
 
 ## Not in scope
 
