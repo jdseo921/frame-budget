@@ -31,6 +31,8 @@ import math
 import sys
 from pathlib import Path
 
+SUMMARY_BEGIN = "<!-- HEADLINE_TABLE:BEGIN -->"
+SUMMARY_END = "<!-- HEADLINE_TABLE:END -->"
 TABLE_BEGIN = "<!-- RESULTS_TABLE:BEGIN -->"
 TABLE_END = "<!-- RESULTS_TABLE:END -->"
 BUDGET_BEGIN = "<!-- BUDGET_CROSSING:BEGIN -->"
@@ -256,6 +258,43 @@ def build_table(points: list[Point], csv_name: str) -> str:
     return "\n".join(lines)
 
 
+def build_headline(points: list[Point], agents: int) -> str:
+    """The four numbers that carry the result: baseline against the most-optimised configuration.
+
+    Both sides are picked from the data rather than named here, so this cannot drift out of step
+    with what was measured: the control is the point labelled "baseline" at the chosen agent count,
+    and the other is whichever point at that count has the most techniques enabled.
+    """
+    at_count = [p for p in points if p.agents == agents]
+    if not at_count:
+        raise SystemExit(f"No rows at {agents} agents; pass --headline-agents with a count that was measured.")
+
+    control = next((p for p in at_count if p.techniques == "baseline"), None)
+    best = max(at_count, key=lambda p: len(p.techniques.split("+")) if p.techniques != "baseline" else 0)
+    if control is None or best is control:
+        raise SystemExit(f"Need both a baseline and an optimised configuration at {agents} agents.")
+
+    def pair(key, fmt):
+        a, _, _ = control.summary(key)
+        b, _, _ = best.summary(key)
+        return fmt(a), fmt(b)
+
+    frame = pair("frame_ms_median", lambda v: fnum(v) + " ms")
+    step = pair("step_ms_median", lambda v: fnum(v) + " ms")
+    draws = pair("draw_calls_median", fcount)
+    collections = (fnum(control.collections_per_frame()), fnum(best.collections_per_frame()))
+
+    lines = [
+        f"| At {agents:,} agents | `baseline` | `{best.techniques}` |",
+        "|---|---:|---:|",
+        f"| Frame time (median) | {frame[0]} | **{frame[1]}** |",
+        f"| Simulation step (median) | {step[0]} | {step[1]} |",
+        f"| Draw calls | {draws[0]} | {draws[1]} |",
+        f"| GC collections / frame | {collections[0]} | {collections[1]} |",
+    ]
+    return "\n".join(lines)
+
+
 def build_crossing(points: list[Point], csv_name: str) -> str:
     """Report where the measured medians bracket each budget, per technique. Never interpolates."""
     techniques = sorted({p.techniques for p in points}, key=lambda t: (t != "baseline", t))
@@ -323,6 +362,8 @@ def main() -> int:
                         help="benchmark summary CSV(s); several are combined if they share an environment")
     parser.add_argument("--readme", type=Path, default=Path("README.md"))
     parser.add_argument("--allow-editor", action="store_true", help="tabulate non-player rows (not results)")
+    parser.add_argument("--headline-agents", type=int, default=10000,
+                        help="agent count for the summary table at the top of the README")
     parser.add_argument("--check", action="store_true", help="exit 1 if the README is not up to date")
     args = parser.parse_args()
 
@@ -331,8 +372,11 @@ def main() -> int:
     table = build_table(points, csv_name)
     crossing = build_crossing(points, csv_name)
 
+    headline = build_headline(points, args.headline_agents)
+
     original = args.readme.read_text(encoding="utf-8")
-    updated = replace_between(original, TABLE_BEGIN, TABLE_END, table, args.readme)
+    updated = replace_between(original, SUMMARY_BEGIN, SUMMARY_END, headline, args.readme)
+    updated = replace_between(updated, TABLE_BEGIN, TABLE_END, table, args.readme)
     updated = replace_between(updated, BUDGET_BEGIN, BUDGET_END, crossing, args.readme)
 
     if args.check:

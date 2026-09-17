@@ -2,7 +2,24 @@
 
 **Ten thousand steering agents, simulated and drawn, in 6.15 ms a frame — and the 16.7 ms budget holds to 18,000 agents.** The deliberately naive baseline this repository started from needs 670.95 ms for the same ten thousand. Three optimisations close that gap, each measured against its own control inside one interleaved sweep, and each verified to leave the simulation *bit-identical* to the baseline — so what changed is the cost and not the result.
 
-A single-scene Unity benchmark that simulates a crowd of simple steering agents and measures what they cost. The measuring instrument shipped before the first optimisation did, so every number in the results table below is a measurement taken by this repository, of this repository, on a release build. Nothing in the table is typed in by hand.
+<!-- Media. Uncomment each line once the file exists in docs/media/ — a commented-out image
+     never renders as a broken one, and this README is the first thing a stranger sees.
+![Ten thousand agents at 6.15 ms, with the instrument panel showing frame time, step time, draw calls and collections](docs/media/hero.png)
+![Toggling the spatial hash at runtime: frame time falls from 670 ms to 17 ms](docs/media/toggle.gif)
+-->
+
+<!-- HEADLINE_TABLE:BEGIN -->
+
+| At 10,000 agents | `baseline` | `spatialHash+zeroAlloc+gpuInstancing` |
+|---|---:|---:|
+| Frame time (median) | 670.95 ms | **6.15 ms** |
+| Simulation step (median) | 664.30 ms | 4.69 ms |
+| Draw calls | 9,818 | 21 |
+| GC collections / frame | 10.95 | 0.06 |
+
+<!-- HEADLINE_TABLE:END -->
+
+A single-scene Unity benchmark that simulates a crowd of simple steering agents and measures what they cost. The measuring instrument shipped before the first optimisation did, so every number on this page is a measurement taken by this repository, of this repository, on a release build. Nothing in any table is typed in by hand — `tools/update_readme_table.py` regenerates them from the CSVs in `results/`.
 
 ## What is here
 
