@@ -29,6 +29,9 @@ namespace FrameBudget
             "gc_alloc_bytes_median,gc_alloc_bytes_p95,draw_calls_median,draw_calls_p95,setpass_calls_median,setpass_calls_p95," +
             "state_hash,invalid_counters";
 
+        /// <summary>Directory the CSVs are written to; defaults to persistentDataPath when absent.</summary>
+        public const string OutputDirArg = "-frameBudgetOutput";
+
         public const string FramesHeader =
             "config,agent_count,run,frame,frame_ms,main_thread_ms,sim_ms,steps,step_cap_hit,present_ms,other_ms,gc_alloc_bytes,draw_calls,setpass_calls";
 
@@ -288,7 +291,12 @@ namespace FrameBudget
             int exitCode = 0;
             try
             {
-                string dir = Path.Combine(Application.persistentDataPath, "FrameBudget");
+                // Committed results belong in the repository, next to the code that produced them;
+                // persistentDataPath stays the default for ad-hoc runs that are nobody's evidence.
+                string requested = CommandLine.GetString(OutputDirArg, null);
+                string dir = requested != null
+                    ? Path.GetFullPath(requested)
+                    : Path.Combine(Application.persistentDataPath, "FrameBudget");
                 Directory.CreateDirectory(dir);
                 string stamp = startedUtc.ToString("yyyyMMdd_HHmmss", CultureInfo.InvariantCulture);
                 string baseName = "benchmark_" + SanitizeFileName(config.name) + "_" + stamp;

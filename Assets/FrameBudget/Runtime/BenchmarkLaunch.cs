@@ -8,6 +8,7 @@ namespace FrameBudget
     /// the editor CLI entry point share one mechanism:
     ///   -frameBudgetBenchmark                 start the benchmark as soon as the scene is up
     ///   -frameBudgetConfig &lt;asset name&gt;   which SimConfig to run (must be listed on the driver)
+    ///   -frameBudgetOutput &lt;directory&gt;    where the CSVs are written (default: persistentDataPath)
     /// In the editor, <c>BenchmarkCli.Run</c> also raises a SessionState flag that survives the
     /// domain reload of entering Play mode. A benchmark requested this way is unattended: the
     /// process exits when it finishes, whether or not it is running in -batchmode.
@@ -23,21 +24,8 @@ namespace FrameBudget
 
         public static bool TryGetRequest(out string configName)
         {
-            configName = null;
-            bool requested = false;
-
-            string[] args = Environment.GetCommandLineArgs();
-            for (int i = 0; i < args.Length; i++)
-            {
-                if (string.Equals(args[i], BenchmarkArg, StringComparison.OrdinalIgnoreCase))
-                {
-                    requested = true;
-                }
-                else if (string.Equals(args[i], ConfigArg, StringComparison.OrdinalIgnoreCase) && i + 1 < args.Length)
-                {
-                    configName = args[i + 1];
-                }
-            }
+            configName = CommandLine.GetString(ConfigArg, null);
+            bool requested = CommandLine.HasFlag(BenchmarkArg);
 
 #if UNITY_EDITOR
             if (UnityEditor.SessionState.GetBool(SessionRequestKey, false))
