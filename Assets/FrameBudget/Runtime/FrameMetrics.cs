@@ -15,6 +15,7 @@ namespace FrameBudget
         public bool HasFrameTime;
         public double FrameMs;          // wall-clock interval between consecutive frame starts (Stopwatch), not Time.deltaTime
         public double MainThreadMs;     // profiler "Main Thread" counter for the previous frame
+        public double GpuMs;            // profiler "GPU Frame Time" counter: the other ceiling a CPU-side win can hide behind
         public double SimMs;            // sum of simulation step time in the frame (Stopwatch)
         public double PresentMs;        // time spent copying positions into Transforms (Stopwatch)
         public double OtherMs;          // FrameMs - SimMs - PresentMs: rendering, engine, editor overhead
@@ -43,10 +44,12 @@ namespace FrameBudget
         public const string DrawCallsCounter = "Draw Calls Count";
         public const string SetPassCallsCounter = "SetPass Calls Count";
         public const string MainThreadCounter = "Main Thread";
+        public const string GpuFrameTimeCounter = "GPU Frame Time";
 
         private ProfilerRecorder drawCallsRecorder;
         private ProfilerRecorder setPassCallsRecorder;
         private ProfilerRecorder mainThreadRecorder;
+        private ProfilerRecorder gpuFrameTimeRecorder;
 
         /// <summary>Allocation counter reading at the previous frame boundary; -1 until the first sample.</summary>
         private long lastAllocationSample = -1L;
@@ -65,6 +68,7 @@ namespace FrameBudget
         public bool DrawCallsValid { get; private set; }
         public bool SetPassCallsValid { get; private set; }
         public bool MainThreadValid { get; private set; }
+        public bool GpuFrameTimeValid { get; private set; }
 
         /// <summary>Which runtime API the allocation numbers came from, for the log and the CSV.</summary>
         public string AllocationSource => AllocationProbe.SourceName;
@@ -77,6 +81,7 @@ namespace FrameBudget
 
         public readonly RollingWindow FrameMs = new RollingWindow(WindowSize);
         public readonly RollingWindow MainThreadMs = new RollingWindow(WindowSize);
+        public readonly RollingWindow GpuMs = new RollingWindow(WindowSize);
         public readonly RollingWindow SimMs = new RollingWindow(WindowSize);
         public readonly RollingWindow StepMs = new RollingWindow(WindowSize);
         public readonly RollingWindow PresentMs = new RollingWindow(WindowSize);
@@ -91,9 +96,11 @@ namespace FrameBudget
             drawCallsRecorder = Start(ProfilerCategory.Render, DrawCallsCounter, invalid, out bool drawValid);
             setPassCallsRecorder = Start(ProfilerCategory.Render, SetPassCallsCounter, invalid, out bool setPassValid);
             mainThreadRecorder = Start(ProfilerCategory.Internal, MainThreadCounter, invalid, out bool mainValid);
+            gpuFrameTimeRecorder = Start(ProfilerCategory.Render, GpuFrameTimeCounter, invalid, out bool gpuValid);
             DrawCallsValid = drawValid;
             SetPassCallsValid = setPassValid;
             MainThreadValid = mainValid;
+            GpuFrameTimeValid = gpuValid;
 
             // Allocation does not come from a profiler counter: day 2 established that the counter
             // does not exist in a release player. It comes from a runtime API that is verified here,
@@ -171,6 +178,7 @@ namespace FrameBudget
                 PresentMs = presentMsPreviousFrame,
                 StepCapHit = stepCapHitPreviousFrame,
                 MainThreadMs = MainThreadValid ? mainThreadRecorder.LastValue / 1_000_000.0 : double.NaN,
+                GpuMs = GpuFrameTimeValid ? gpuFrameTimeRecorder.LastValue / 1_000_000.0 : double.NaN,
                 DrawCalls = DrawCallsValid ? drawCallsRecorder.LastValue : -1,
                 SetPassCalls = SetPassCallsValid ? setPassCallsRecorder.LastValue : -1,
             };
@@ -215,6 +223,7 @@ namespace FrameBudget
                 PresentMs.Add(s.PresentMs);
                 OtherMs.Add(s.OtherMs);
                 if (MainThreadValid) MainThreadMs.Add(s.MainThreadMs);
+                if (GpuFrameTimeValid) GpuMs.Add(s.GpuMs);
                 if (GcAllocatedValid)
                 {
                     CollectionsObserved += s.GcCollections;
@@ -237,6 +246,7 @@ namespace FrameBudget
         {
             FrameMs.Clear();
             MainThreadMs.Clear();
+            GpuMs.Clear();
             SimMs.Clear();
             StepMs.Clear();
             PresentMs.Clear();
@@ -253,6 +263,7 @@ namespace FrameBudget
             drawCallsRecorder.Dispose();
             setPassCallsRecorder.Dispose();
             mainThreadRecorder.Dispose();
+            gpuFrameTimeRecorder.Dispose();
         }
     }
 }

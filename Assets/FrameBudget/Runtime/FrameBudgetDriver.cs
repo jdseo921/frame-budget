@@ -243,6 +243,7 @@ namespace FrameBudget
             sb.Append("  environment:        ").Append(RunEnvironment.Describe()).Append('\n');
             sb.Append("  pacing:             ").Append(RunGuard.Describe()).Append('\n');
             sb.Append("  allocation source:  ").Append(metrics.AllocationSource).Append("  verified=").Append(metrics.GcAllocatedValid).Append('\n');
+            sb.Append("  GPU frame time:     ").Append(metrics.GpuFrameTimeValid ? "counter resolved" : "NOT AVAILABLE").Append('\n');
             sb.Append("  draw / SetPass:     ").Append(metrics.DrawCallsValid && metrics.SetPassCallsValid ? "counters resolved" : "NOT AVAILABLE").Append('\n');
 
             // When no counter verified, survey every candidate this runtime might offer, so the

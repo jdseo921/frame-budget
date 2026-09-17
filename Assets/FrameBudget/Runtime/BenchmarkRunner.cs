@@ -25,7 +25,8 @@ namespace FrameBudget
             "seed,fixed_timestep_s,stepping_mode,max_steps_per_frame,warmup_frames,measured_frames," +
             "steps_in_window,sim_steps_total,capped_frames,dropped_sim_seconds," +
             "gc_collections_in_window,frames_with_collection," +
-            "frame_ms_median,frame_ms_p95,main_thread_ms_median,main_thread_ms_p95,sim_ms_per_frame_median,sim_ms_per_frame_p95," +
+            "frame_ms_median,frame_ms_p95,main_thread_ms_median,main_thread_ms_p95,gpu_ms_median,gpu_ms_p95," +
+            "sim_ms_per_frame_median,sim_ms_per_frame_p95," +
             "step_ms_median,step_ms_p95,present_ms_median,present_ms_p95,other_ms_median,other_ms_p95," +
             "gc_alloc_bytes_median,gc_alloc_bytes_p95,draw_calls_median,draw_calls_p95,setpass_calls_median,setpass_calls_p95," +
             "state_hash,invalid_counters,allocation_source";
@@ -34,7 +35,7 @@ namespace FrameBudget
         public const string OutputDirArg = "-frameBudgetOutput";
 
         public const string FramesHeader =
-            "config,agent_count,run,frame,frame_ms,main_thread_ms,sim_ms,steps,step_cap_hit,present_ms,other_ms,gc_alloc_bytes,draw_calls,setpass_calls";
+            "config,agent_count,run,frame,frame_ms,main_thread_ms,gpu_ms,sim_ms,steps,step_cap_hit,present_ms,other_ms,gc_alloc_bytes,draw_calls,setpass_calls";
 
         private Phase phase = Phase.Idle;
         private SimConfig config;
@@ -48,6 +49,7 @@ namespace FrameBudget
         // Preallocated per-point sample storage (no allocation while measuring).
         private double[] frameMs = Array.Empty<double>();
         private double[] mainThreadMs = Array.Empty<double>();
+        private double[] gpuMs = Array.Empty<double>();
         private double[] simMs = Array.Empty<double>();
         private double[] presentMs = Array.Empty<double>();
         private double[] otherMs = Array.Empty<double>();
@@ -111,6 +113,7 @@ namespace FrameBudget
             int m = cfg.measuredFrameCount;
             frameMs = new double[m];
             mainThreadMs = new double[m];
+            gpuMs = new double[m];
             simMs = new double[m];
             presentMs = new double[m];
             otherMs = new double[m];
@@ -189,6 +192,7 @@ namespace FrameBudget
                     int k = measured;
                     frameMs[k] = s.FrameMs;
                     mainThreadMs[k] = s.MainThreadMs;
+                    gpuMs[k] = s.GpuMs;
                     simMs[k] = s.SimMs;
                     presentMs[k] = s.PresentMs;
                     otherMs[k] = s.OtherMs;
@@ -228,6 +232,7 @@ namespace FrameBudget
                 if (capHit[i]) cappedFrames++;
                 frames.Append(Q(configName)).Append(',').Append(agents).Append(',').Append(runNumber).Append(',').Append(i).Append(',')
                       .Append(F(frameMs[i])).Append(',').Append(metrics.MainThreadValid ? F(mainThreadMs[i]) : "").Append(',')
+                      .Append(metrics.GpuFrameTimeValid ? F(gpuMs[i]) : "").Append(',')
                       .Append(F(simMs[i])).Append(',').Append(stepsPerFrame[i]).Append(',').Append(capHit[i] ? 1 : 0).Append(',')
                       .Append(F(presentMs[i])).Append(',').Append(F(otherMs[i])).Append(',')
                       .Append(metrics.GcAllocatedValid && gcBytes[i] >= 0 ? I(gcBytes[i]) : "").Append(',')
@@ -241,6 +246,7 @@ namespace FrameBudget
             Percentiles.MedianAndP95(otherMs, measured, out double otherMed, out double otherP95);
             Percentiles.MedianAndP95(stepMs, stepCount, out double stepMed, out double stepP95);
             string mainStats = metrics.MainThreadValid ? Stats(mainThreadMs, measured, false) : ",";
+            string gpuStats = metrics.GpuFrameTimeValid ? Stats(gpuMs, measured, false) : ",";
             // Frames whose allocation was invalidated by a collection hold -1 and must not reach the
             // percentile pass; compact the valid ones to the front and summarise only those.
             int validGc = 0;
@@ -281,6 +287,7 @@ namespace FrameBudget
                    .Append(framesWithCollection).Append(',')
                    .Append(F(frameMed)).Append(',').Append(F(frameP95)).Append(',')
                    .Append(mainStats).Append(',')
+                   .Append(gpuStats).Append(',')
                    .Append(F(simMed)).Append(',').Append(F(simP95)).Append(',')
                    .Append(F(stepMed)).Append(',').Append(F(stepP95)).Append(',')
                    .Append(F(presentMed)).Append(',').Append(F(presentP95)).Append(',')
