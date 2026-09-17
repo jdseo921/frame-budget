@@ -29,13 +29,14 @@ namespace FrameBudget
             "sim_ms_per_frame_median,sim_ms_per_frame_p95," +
             "step_ms_median,step_ms_p95,present_ms_median,present_ms_p95,other_ms_median,other_ms_p95," +
             "gc_alloc_bytes_median,gc_alloc_bytes_p95,draw_calls_median,draw_calls_p95,setpass_calls_median,setpass_calls_p95," +
+            "batches_median,batches_p95," +
             "state_hash,invalid_counters,allocation_source";
 
         /// <summary>Directory the CSVs are written to; defaults to persistentDataPath when absent.</summary>
         public const string OutputDirArg = "-frameBudgetOutput";
 
         public const string FramesHeader =
-            "config,agent_count,run,frame,frame_ms,main_thread_ms,gpu_ms,sim_ms,steps,step_cap_hit,present_ms,other_ms,gc_alloc_bytes,draw_calls,setpass_calls";
+            "config,agent_count,run,frame,frame_ms,main_thread_ms,gpu_ms,sim_ms,steps,step_cap_hit,present_ms,other_ms,gc_alloc_bytes,draw_calls,setpass_calls,batches";
 
         private Phase phase = Phase.Idle;
         private SimConfig config;
@@ -56,6 +57,7 @@ namespace FrameBudget
         private double[] gcBytes = Array.Empty<double>();
         private double[] drawCalls = Array.Empty<double>();
         private double[] setPassCalls = Array.Empty<double>();
+        private double[] batches = Array.Empty<double>();
         private int[] stepsPerFrame = Array.Empty<int>();
         private bool[] capHit = Array.Empty<bool>();
         private double[] stepMs = Array.Empty<double>();
@@ -120,6 +122,7 @@ namespace FrameBudget
             gcBytes = new double[m];
             drawCalls = new double[m];
             setPassCalls = new double[m];
+            batches = new double[m];
             stepsPerFrame = new int[m];
             capHit = new bool[m];
             stepMs = new double[m * cfg.maxStepsPerFrame];
@@ -199,6 +202,7 @@ namespace FrameBudget
                     gcBytes[k] = s.GcAllocatedBytes;
                     drawCalls[k] = s.DrawCalls;
                     setPassCalls[k] = s.SetPassCalls;
+                    batches[k] = s.Batches;
                     stepsPerFrame[k] = s.Steps;
                     capHit[k] = s.StepCapHit;
                     collectionsInWindow += s.GcCollections;
@@ -237,7 +241,8 @@ namespace FrameBudget
                       .Append(F(presentMs[i])).Append(',').Append(F(otherMs[i])).Append(',')
                       .Append(metrics.GcAllocatedValid && gcBytes[i] >= 0 ? I(gcBytes[i]) : "").Append(',')
                       .Append(metrics.DrawCallsValid ? I(drawCalls[i]) : "").Append(',')
-                      .Append(metrics.SetPassCallsValid ? I(setPassCalls[i]) : "").Append('\n');
+                      .Append(metrics.SetPassCallsValid ? I(setPassCalls[i]) : "").Append(',')
+                      .Append(metrics.BatchesValid ? I(batches[i]) : "").Append('\n');
             }
 
             Percentiles.MedianAndP95(frameMs, measured, out double frameMed, out double frameP95);
@@ -257,6 +262,7 @@ namespace FrameBudget
             string gcStats = metrics.GcAllocatedValid && validGc > 0 ? Stats(gcBytes, validGc, true) : ",";
             string drawStats = metrics.DrawCallsValid ? Stats(drawCalls, measured, true) : ",";
             string setPassStats = metrics.SetPassCallsValid ? Stats(setPassCalls, measured, true) : ",";
+            string batchesStats = metrics.BatchesValid ? Stats(batches, measured, true) : ",";
 
             summary.Append(Q(DateTime.UtcNow.ToString("o", CultureInfo.InvariantCulture))).Append(',')
                    .Append(environmentRow).Append(',')
@@ -295,6 +301,7 @@ namespace FrameBudget
                    .Append(gcStats).Append(',')
                    .Append(drawStats).Append(',')
                    .Append(setPassStats).Append(',')
+                   .Append(batchesStats).Append(',')
                    .Append(stateHash.ToString("X16")).Append(',')
                    .Append(Q(metrics.InvalidCounters)).Append(',')
                    .Append(Q(metrics.AllocationSource)).Append('\n');

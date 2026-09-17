@@ -246,6 +246,7 @@ MonoBehaviour:
   - {fileID: 11400000, guid: 7ad78910ae450294ca98cf229928a139, type: 2}
   - {fileID: 11400000, guid: b9f991403eab152c5e357b530e57839d, type: 2}
   - {fileID: 11400000, guid: 5b3e33c7b7d6f11809f293558463409c, type: 2}
+  - {fileID: 11400000, guid: 81707157f60a3860c7b47a09d8be6f1a, type: 2}
   agentMaterial: {fileID: 2100000, guid: 5e52467b09c1af84aab31ecb15bfb4af, type: 2}
 --- !u!4 &1002022924
 Transform:

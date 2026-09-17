@@ -25,6 +25,7 @@ namespace FrameBudget
         public int GcCollections;       // generation-0 collections that ran during the frame
         public long DrawCalls;
         public long SetPassCalls;
+        public long Batches;            // renderer batch groups: the diagnostic for why SetPass scales with object count
     }
 
     /// <summary>
@@ -45,11 +46,13 @@ namespace FrameBudget
         public const string SetPassCallsCounter = "SetPass Calls Count";
         public const string MainThreadCounter = "Main Thread";
         public const string GpuFrameTimeCounter = "GPU Frame Time";
+        public const string BatchesCounter = "Batches Count";
 
         private ProfilerRecorder drawCallsRecorder;
         private ProfilerRecorder setPassCallsRecorder;
         private ProfilerRecorder mainThreadRecorder;
         private ProfilerRecorder gpuFrameTimeRecorder;
+        private ProfilerRecorder batchesRecorder;
 
         /// <summary>Allocation counter reading at the previous frame boundary; -1 until the first sample.</summary>
         private long lastAllocationSample = -1L;
@@ -69,6 +72,7 @@ namespace FrameBudget
         public bool SetPassCallsValid { get; private set; }
         public bool MainThreadValid { get; private set; }
         public bool GpuFrameTimeValid { get; private set; }
+        public bool BatchesValid { get; private set; }
 
         /// <summary>Which runtime API the allocation numbers came from, for the log and the CSV.</summary>
         public string AllocationSource => AllocationProbe.SourceName;
@@ -89,6 +93,7 @@ namespace FrameBudget
         public readonly RollingWindow GcBytes = new RollingWindow(WindowSize);
         public readonly RollingWindow DrawCalls = new RollingWindow(WindowSize);
         public readonly RollingWindow SetPassCalls = new RollingWindow(WindowSize);
+        public readonly RollingWindow Batches = new RollingWindow(WindowSize);
 
         public FrameMetrics()
         {
@@ -97,10 +102,12 @@ namespace FrameBudget
             setPassCallsRecorder = Start(ProfilerCategory.Render, SetPassCallsCounter, invalid, out bool setPassValid);
             mainThreadRecorder = Start(ProfilerCategory.Internal, MainThreadCounter, invalid, out bool mainValid);
             gpuFrameTimeRecorder = Start(ProfilerCategory.Render, GpuFrameTimeCounter, invalid, out bool gpuValid);
+            batchesRecorder = Start(ProfilerCategory.Render, BatchesCounter, invalid, out bool batchesValid);
             DrawCallsValid = drawValid;
             SetPassCallsValid = setPassValid;
             MainThreadValid = mainValid;
             GpuFrameTimeValid = gpuValid;
+            BatchesValid = batchesValid;
 
             // Allocation does not come from a profiler counter: day 2 established that the counter
             // does not exist in a release player. It comes from a runtime API that is verified here,
@@ -181,6 +188,7 @@ namespace FrameBudget
                 GpuMs = GpuFrameTimeValid ? gpuFrameTimeRecorder.LastValue / 1_000_000.0 : double.NaN,
                 DrawCalls = DrawCallsValid ? drawCallsRecorder.LastValue : -1,
                 SetPassCalls = SetPassCallsValid ? setPassCallsRecorder.LastValue : -1,
+                Batches = BatchesValid ? batchesRecorder.LastValue : -1,
             };
 
             // Allocation across the frame that just finished. When the counter reports heap size
@@ -232,6 +240,7 @@ namespace FrameBudget
                 }
                 if (DrawCallsValid) DrawCalls.Add(s.DrawCalls);
                 if (SetPassCallsValid) SetPassCalls.Add(s.SetPassCalls);
+                if (BatchesValid) Batches.Add(s.Batches);
             }
             return s;
         }
@@ -254,6 +263,7 @@ namespace FrameBudget
             GcBytes.Clear();
             DrawCalls.Clear();
             SetPassCalls.Clear();
+            Batches.Clear();
             FramesWithCollection = 0;
             CollectionsObserved = 0;
         }
@@ -264,6 +274,7 @@ namespace FrameBudget
             setPassCallsRecorder.Dispose();
             mainThreadRecorder.Dispose();
             gpuFrameTimeRecorder.Dispose();
+            batchesRecorder.Dispose();
         }
     }
 }

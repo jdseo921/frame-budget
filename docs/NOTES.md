@@ -74,6 +74,46 @@ investigated this and am not going to guess at it; recording it here so that it 
 discovered later and mistaken for something a technique caused. It needs looking at before the GPU
 instancing day, because that day's claim will rest on these two counters.
 
+> **Correction, 2026-09-18 (day 3).** Investigated. The expectation in the entry above was simply
+> wrong, and the leading hypothesis — that dynamic batching was flushing and costing a SetPass per
+> batch group — is also wrong, on two counts.
+>
+> First, dynamic batching was already disabled, and had been since day 1 (`m_DynamicBatching: 0`).
+> So it could not have been causing anything.
+>
+> Second, the controlled test says SetPass does not depend on it at all. Building the same scene
+> with dynamic batching on and off and measuring the same three agent counts:
+>
+> | Agents | Draw calls off → on | SetPass off → on | Batches off → on | Frame ms off → on |
+> |---:|---:|---:|---:|---:|
+> | 500 | 507 → 16 | 13 → 13 | 499 → 16 | 2.88 → 2.98 |
+> | 2,000 | 1,979 → 31 | 28 → 28 | 1,928 → 31 | 29.36 → 27.58 |
+> | 5,000 | 4,917 → 60 | 58 → 58 | 4,727 → 60 | 164.07 → 161.51 |
+>
+> Draw calls collapse by roughly thirty times and **SetPass does not move by a single call**.
+>
+> What the numbers do show is that SetPass tracks the number of *batch groups* the renderer forms,
+> not the number of draw calls it issues. With batching on, the merged draw count (16 / 31 / 60) is
+> almost exactly the SetPass count (13 / 28 / 58) at every size. The renderer forms the same groups
+> either way; the batching flag only decides whether each group is submitted as one merged draw or
+> as one draw per object, and the pass state is applied once per group in both cases. Since a group
+> holds a bounded number of objects, more agents means more groups means more SetPass — a straight
+> line, about one SetPass per 98 agents plus a constant of roughly eight, which is the HUD.
+>
+> What I have *not* established is the rule that bounds a group's size, which is not constant here
+> (about 31 objects per group at 500 agents, about 83 at 5,000). It is not the dynamic-batching
+> vertex budget, which would give a fixed number. I am leaving that unresolved rather than guessing,
+> because the practical question it was blocking is now answered: SetPass is a well-behaved linear
+> function of agent count and nothing about it is anomalous.
+>
+> **The finding that actually matters is the last column.** Collapsing draw calls thirty-fold
+> changed frame time by less than two per cent, and the GPU frame time counter added today reads
+> 0.32, 0.95 and 2.11 ms at 500, 2,000 and 5,000 agents against CPU frame times of 2.9, 29 and
+> 164 ms. Rendering is nowhere near the ceiling; this workload is CPU-bound in the simulation by an
+> enormous margin. That is a direct warning about the GPU instancing day: instancing will collapse
+> the draw-call count impressively and, on this evidence, may move frame time hardly at all at these
+> agent counts. Better to know that now than to discover it while writing that day's claim.
+
 ### Things about the harness I do not trust
 
 **`other_ms` is a residual, not a measurement.** It is computed as
