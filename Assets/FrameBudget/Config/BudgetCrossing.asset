@@ -1,0 +1,41 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 17d830e5717acf842afdf6266d67a940, type: 3}
+  m_Name: BudgetCrossing
+  m_EditorClassIdentifier: FrameBudget::FrameBudget.SimConfig
+  agentCount: 16000
+  worldHalfExtent: 100
+  seed: 12345
+  fixedTimestep: 0.016666668
+  maxStepsPerFrame: 1
+  neighbourRadius: 4
+  maxSpeed: 6
+  maxAcceleration: 12
+  separationWeight: 4
+  goalReachedRadius: 1
+  tickBucketCount: 4
+  spatialHashCellSize: 0
+  warmupFrameCount: 60
+  measuredFrameCount: 300
+  sweepAgentCounts: e02e0000b0360000803e000050460000204e0000c05d0000
+  runsPerAgentCount: 5
+  spatialHash: 1
+  zeroAlloc: 1
+  tickBudget: 0
+  gpuInstancing: 1
+  burstJobs: 0
+  techniqueSweep:
+  - spatialHash: 1
+    zeroAlloc: 1
+    tickBudget: 0
+    gpuInstancing: 1
+    burstJobs: 0

@@ -8,7 +8,7 @@ A single-scene Unity benchmark that simulates a crowd of simple steering agents 
 - **The naive baseline.** Agent state lives in parallel arrays of structs, not in per-agent MonoBehaviours. In benchmark mode the simulation runs exactly one fixed-timestep step per frame, so frame cost and step cost describe the same work in every row. Everything else is deliberately unoptimised and labelled as such in the code: an all-pairs neighbour query, one GameObject per agent, `GetComponent` inside the per-agent loop, LINQ in the hot path, and HUD text rebuilt by string concatenation every frame. Each of these is a control condition that a later technique removes.
 - **The techniques.** Each is a runtime flag measured against its own control inside a single sweep, interleaved with it, so a comparison never spans a thermal ramp. A technique that alters the simulation's arithmetic must produce a **bit-identical** `state_hash` to its control at the same seed and step count: a faster neighbour query that returns a different set of neighbours is not an optimisation but a different simulation, and it fails flatteringly, so timing alone cannot be the acceptance test. Implemented so far: **spatialHash**, a uniform grid replacing the all-pairs scan. Still to come: zeroAlloc, tickBudget, gpuInstancing, burstJobs.
 - **The HUD.** IMGUI, sized to be readable in a screen recording, drawn in its own column beside the world view rather than over it: agent count, simulation time, frame time, GC per frame, draw calls, SetPass calls, and a rolling frame-time graph with the sixty-frames-per-second budget drawn across it.
-- **The benchmark mode.** Sweeps agent counts from a `SimConfig` asset, discards warm-up frames, records the measured frames and writes two CSVs — a summary with medians and tails per (agent count, technique combination, run), and every measured frame so the summary can be audited. Runs of a configuration are interleaved rather than blocked, so thermal drift on a laptop spreads across configurations instead of landing on one. `-frameBudgetOutput <dir>` sends them into `results/`; without it they go to `Application.persistentDataPath`. Before measuring anything it asserts that vsync and the frame cap are off, and aborts the run rather than reporting numbers that describe the display.
+- **The benchmark mode.** Sweeps agent counts from a `SimConfig` asset, discards warm-up frames, records the measured frames and writes two CSVs â€” a summary with medians and tails per (agent count, technique combination, run), and every measured frame so the summary can be audited. Runs of a configuration are interleaved rather than blocked, so thermal drift on a laptop spreads across configurations instead of landing on one. `-frameBudgetOutput <dir>` sends them into `results/`; without it they go to `Application.persistentDataPath`. Before measuring anything it asserts that vsync and the frame cap are off, and aborts the run rather than reporting numbers that describe the display.
 
 ## Running it
 
@@ -49,16 +49,34 @@ Every cell below is filled from the benchmark CSV by `tools/update_readme_table.
 
 | Agents | Techniques | Runs | Frame ms (median) | Frame ms (run spread) | Frame ms (p95) | Sim step ms (median) | GC collections / frame | GC alloc / frame | Draw calls | SetPass calls |
 |-------:|------------|-----:|------------------:|:----------------------|---------------:|---------------------:|-----------------------:|-----------------:|-----------:|--------------:|
-| 1,000 | spatialHash+zeroAlloc | 5 | 1.95 | 1.70 – 2.06 | 3.58 | 0.14 | 0.05 | 56.0 KB | 1,009 | 18 |
-| 2,000 | spatialHash+zeroAlloc | 5 | 2.41 | 2.26 – 2.46 | 4.06 | 0.37 | 0.06 | 64.0 KB | 2,003 | 28 |
-| 5,000 | spatialHash+zeroAlloc | 5 | 4.98 | 4.86 – 5.26 | 7.65 | 1.48 | 0.06 | 64.0 KB | 4,981 | 58 |
-| 10,000 | spatialHash+zeroAlloc | 5 | 11.61 | 10.24 – 14.45 | 19.73 | 4.77 | 0.06 | 64.0 KB | 9,940 | 108 |
+| 1,000 | baseline | 5 | 9.05 | 8.17 – 10.19 | 11.52 | 7.29 | 0.72 | 256.0 KB | 1,010 | 18 |
+| 2,000 | baseline | 5 | 31.78 | 29.59 – 35.70 | 35.30 | 28.83 | 1.61 |  | 1,983 | 28 |
+| 5,000 | baseline | 5 | 174.24 | 171.91 – 179.26 | 504.04 | 168.70 | 4.89 |  | 4,912 | 58 |
+| 10,000 | baseline | 5 | 670.95 | 668.96 – 744.32 | 687.63 | 664.30 | 10.95 |  | 9,818 | 108 |
+| 1,000 | spatialHash | 5 | 1.76 | 1.74 – 1.81 | 2.33 | 0.22 | 0.36 | 124.0 KB | 1,013 | 18 |
+| 2,000 | spatialHash | 5 | 2.89 | 2.79 – 2.90 | 3.30 | 0.88 | 0.79 | 324.0 KB | 2,007 | 28 |
+| 5,000 | spatialHash | 5 | 6.71 | 6.55 – 6.83 | 8.47 | 3.24 | 2.29 |  | 4,988 | 58 |
+| 10,000 | spatialHash | 5 | 16.68 | 16.02 – 16.84 | 20.98 | 10.94 | 5.71 |  | 9,940 | 108 |
+| 1,000 | spatialHash+zeroAlloc | 10 | 1.70 | 1.60 – 2.06 | 2.40 | 0.13 | 0.06 | 52.0 KB | 1,011 | 18 |
+| 2,000 | spatialHash+zeroAlloc | 10 | 2.29 | 2.22 – 2.46 | 2.92 | 0.36 | 0.06 | 52.0 KB | 2,003 | 28 |
+| 5,000 | spatialHash+zeroAlloc | 10 | 4.86 | 4.49 – 5.26 | 7.11 | 1.45 | 0.06 | 64.0 KB | 4,985 | 58 |
+| 10,000 | spatialHash+zeroAlloc | 10 | 10.24 | 9.59 – 14.45 | 14.31 | 4.71 | 0.06 | 64.0 KB | 9,942 | 108 |
 | 1,000 | spatialHash+zeroAlloc+gpuInstancing | 5 | 1.36 | 1.24 – 1.53 | 2.33 | 0.14 | 0.06 | 56.0 KB | 21 | 9 |
 | 2,000 | spatialHash+zeroAlloc+gpuInstancing | 5 | 1.68 | 1.34 – 1.80 | 2.67 | 0.37 | 0.07 | 60.0 KB | 21 | 9 |
 | 5,000 | spatialHash+zeroAlloc+gpuInstancing | 5 | 2.80 | 2.73 – 2.93 | 4.60 | 1.46 | 0.07 | 64.0 KB | 21 | 9 |
 | 10,000 | spatialHash+zeroAlloc+gpuInstancing | 5 | 6.15 | 6.12 – 6.22 | 8.78 | 4.69 | 0.06 | 68.0 KB | 21 | 9 |
+| 12,000 | spatialHash+zeroAlloc+gpuInstancing | 5 | 7.18 | 7.08 – 7.52 | 10.13 | 5.88 | 0.08 | 68.0 KB | 21 | 9 |
+| 14,000 | spatialHash+zeroAlloc+gpuInstancing | 5 | 9.36 | 9.16 – 9.48 | 12.37 | 7.86 | 0.08 | 68.0 KB | 21 | 9 |
+| 16,000 | spatialHash+zeroAlloc+gpuInstancing | 5 | 11.60 | 11.37 – 11.86 | 14.73 | 10.16 | 0.07 | 68.0 KB | 21 | 9 |
+| 18,000 | spatialHash+zeroAlloc+gpuInstancing | 5 | 14.21 | 13.99 – 14.38 | 17.68 | 12.65 | 0.07 | 68.0 KB | 21 | 9 |
+| 20,000 | spatialHash+zeroAlloc+gpuInstancing | 5 | 16.95 | 16.91 – 17.31 | 20.75 | 15.32 | 0.07 | 68.0 KB | 21 | 9 |
+| 24,000 | spatialHash+zeroAlloc+gpuInstancing | 5 | 23.46 | 23.12 – 23.77 | 27.30 | 21.62 | 0.07 | 72.0 KB | 21 | 9 |
+| 1,000 | zeroAlloc | 5 | 2.13 | 2.10 – 2.15 | 2.73 | 0.65 | 0.08 | 48.0 KB | 1,012 | 18 |
+| 2,000 | zeroAlloc | 5 | 4.48 | 4.26 – 4.69 | 8.20 | 2.46 | 0.08 | 48.0 KB | 2,005 | 28 |
+| 5,000 | zeroAlloc | 5 | 19.69 | 19.44 – 21.42 | 21.71 | 16.07 | 0.08 | 60.0 KB | 4,946 | 58 |
+| 10,000 | zeroAlloc | 5 | 71.44 | 70.56 – 72.27 | 493.49 | 64.74 | 0.08 | 64.0 KB | 9,820 | 108 |
 
-*Generated by `tools/update_readme_table.py` from `results/benchmark_InstancingSweep_20260917_103138.csv` — do not edit by hand.*
+*Generated by `tools/update_readme_table.py` from `results/benchmark_TechniqueMatrix_20260917_095811.csv, results/benchmark_InstancingSweep_20260917_103138.csv, results/benchmark_BudgetCrossing_20260917_103556.csv` — do not edit by hand.*
 
 <!-- RESULTS_TABLE:END -->
 
@@ -66,9 +84,9 @@ Every cell below is filled from the benchmark CSV by `tools/update_readme_table.
 
 Three columns deserve a note.
 
-**Allocation is measured as managed heap growth, not as cumulative bytes allocated.** The profiler's per-frame allocation counter does not exist in a release player, so `AllocationProbe` uses `GC.GetTotalMemory` instead, verified against a known allocation on every run. Unity's collector reclaims only when it collects, so between collections a rise in heap size is exactly the bytes allocated — and across a collection it is not, since the heap can shrink while a great deal was allocated. Frames in which a collection ran are therefore excluded from **GC alloc / frame**, which is why that cell is blank wherever allocation is heavy enough to collect in most frames. Blank means *not measurable in that row*, never zero.
+**Allocation is measured as managed heap growth, not as cumulative bytes allocated.** The profiler's per-frame allocation counter does not exist in a release player, so `AllocationProbe` uses `GC.GetTotalMemory` instead, verified against a known allocation on every run. Unity's collector reclaims only when it collects, so between collections a rise in heap size is exactly the bytes allocated â€” and across a collection it is not, since the heap can shrink while a great deal was allocated. Frames in which a collection ran are therefore excluded from **GC alloc / frame**, which is why that cell is blank wherever allocation is heavy enough to collect in most frames. Blank means *not measurable in that row*, never zero.
 
-**That is why GC collections / frame is the primary allocation metric here.** It is measured in every row regardless of how heavy the allocation is, and it counts the thing that actually costs frame time — a collection is a pause. Bytes per frame are the supporting detail, reported where they can be.
+**That is why GC collections / frame is the primary allocation metric here.** It is measured in every row regardless of how heavy the allocation is, and it counts the thing that actually costs frame time â€” a collection is a pause. Bytes per frame are the supporting detail, reported where they can be.
 
 **Frame cost and step cost describe the same work in every row.** Benchmark mode runs exactly one fixed-timestep step per frame, so a row's frame time always includes exactly one simulation step plus presentation and rendering. (Interactive play still paces itself against real time; those rows are marked `realtime-accumulator-capped` in `stepping_mode` and are not results.)
 
@@ -76,15 +94,30 @@ Three columns deserve a note.
 
 <!-- BUDGET_CROSSING:BEGIN -->
 
+**baseline**
+
+- **16.7 ms (60 fps)** — crossed between **1,000 agents** (9.05 ms) and **2,000 agents** (31.78 ms). The sweep does not sample between those two counts, so the exact crossing point is bracketed, not measured.
+- **33.3 ms (30 fps)** — crossed between **2,000 agents** (31.78 ms) and **5,000 agents** (174.24 ms). The sweep does not sample between those two counts, so the exact crossing point is bracketed, not measured.
+
+**spatialHash**
+
+- **16.7 ms (60 fps)** — crossed between **5,000 agents** (6.71 ms) and **10,000 agents** (16.68 ms). The sweep does not sample between those two counts, so the exact crossing point is bracketed, not measured.
+- **33.3 ms (30 fps)** — not crossed at any measured agent count. The largest measured point, 10,000 agents, has a median frame time of 16.68 ms.
+
 **spatialHash+zeroAlloc**
 
-- **16.7 ms (60 fps)** — not crossed at any measured agent count. The largest measured point, 10,000 agents, has a median frame time of 11.61 ms.
-- **33.3 ms (30 fps)** — not crossed at any measured agent count. The largest measured point, 10,000 agents, has a median frame time of 11.61 ms.
+- **16.7 ms (60 fps)** — not crossed at any measured agent count. The largest measured point, 10,000 agents, has a median frame time of 10.24 ms.
+- **33.3 ms (30 fps)** — not crossed at any measured agent count. The largest measured point, 10,000 agents, has a median frame time of 10.24 ms.
 
 **spatialHash+zeroAlloc+gpuInstancing**
 
-- **16.7 ms (60 fps)** — not crossed at any measured agent count. The largest measured point, 10,000 agents, has a median frame time of 6.15 ms.
-- **33.3 ms (30 fps)** — not crossed at any measured agent count. The largest measured point, 10,000 agents, has a median frame time of 6.15 ms.
+- **16.7 ms (60 fps)** — crossed between **18,000 agents** (14.21 ms) and **20,000 agents** (16.95 ms). The sweep does not sample between those two counts, so the exact crossing point is bracketed, not measured.
+- **33.3 ms (30 fps)** — not crossed at any measured agent count. The largest measured point, 24,000 agents, has a median frame time of 23.46 ms.
+
+**zeroAlloc**
+
+- **16.7 ms (60 fps)** — crossed between **2,000 agents** (4.48 ms) and **5,000 agents** (19.69 ms). The sweep does not sample between those two counts, so the exact crossing point is bracketed, not measured.
+- **33.3 ms (30 fps)** — crossed between **5,000 agents** (19.69 ms) and **10,000 agents** (71.44 ms). The sweep does not sample between those two counts, so the exact crossing point is bracketed, not measured.
 
 <!-- BUDGET_CROSSING:END -->
 
