@@ -6,7 +6,7 @@ nothing is typed in by hand. This script is what makes that claim true. It reads
 written by BenchmarkRunner, rewrites the region between the marker comments in the README, and
 prints what it did.
 
-    python tools/update_readme_table.py --csv results/<file>.csv
+    python tools/update_readme_table.py --csv results/<file>.csv [more.csv ...]
 
 Standard library only, by design: the evidence pipeline should not need a package install to run.
 
@@ -115,16 +115,23 @@ class Point:
         return median(values), min(values), max(values)
 
 
-def load_points(csv_path: Path, allow_editor: bool) -> tuple[list[Point], dict]:
-    with csv_path.open(newline="", encoding="utf-8") as handle:
-        rows = list(csv.DictReader(handle))
-    if not rows:
-        raise SystemExit(f"{csv_path}: no rows")
+def load_points(csv_paths: list[Path], allow_editor: bool) -> tuple[list[Point], dict]:
+    """Load one or more summary CSVs into data points.
 
-    required = {"agent_count", "techniques", "frame_ms_median", "step_ms_median"}
-    missing = required - set(rows[0].keys())
-    if missing:
-        raise SystemExit(f"{csv_path}: missing expected columns: {sorted(missing)}")
+    Several CSVs may be combined -- a sweep is often split into a coarse pass and a finer one around
+    an interesting region -- but only if they describe the same environment, which is checked below.
+    """
+    rows: list[dict] = []
+    for csv_path in csv_paths:
+        with csv_path.open(newline="", encoding="utf-8") as handle:
+            part = list(csv.DictReader(handle))
+        if not part:
+            raise SystemExit(f"{csv_path}: no rows")
+        required = {"agent_count", "techniques", "frame_ms_median", "step_ms_median"}
+        missing = required - set(part[0].keys())
+        if missing:
+            raise SystemExit(f"{csv_path}: missing expected columns: {sorted(missing)}")
+        rows.extend(part)
 
     eligible, refused = [], []
     for row in rows:
@@ -150,15 +157,21 @@ def load_points(csv_path: Path, allow_editor: bool) -> tuple[list[Point], dict]:
                 "(see docs/METHOD.md section 1). Pass --allow-editor to tabulate them anyway."
             )
 
-    backends = {r.get("scripting_backend") for r in eligible}
-    pipelines = {r.get("render_pipeline") for r in eligible}
-    if len(backends) > 1:
-        raise SystemExit(
-            f"This CSV mixes scripting backends {sorted(backends)}. Mono and IL2CPP timings are not "
-            "comparable and must not share a table."
-        )
-    if len(pipelines) > 1:
-        raise SystemExit(f"This CSV mixes render pipelines {sorted(pipelines)}; they are not comparable.")
+    # Anything that would make two rows incomparable must not end up in one table.
+    for column, explanation in (
+        ("scripting_backend", "Mono and IL2CPP timings are not comparable"),
+        ("render_pipeline", "render pipelines are not comparable"),
+        ("cpu", "rows from different CPUs are not comparable"),
+        ("gpu", "rows from different GPUs are not comparable"),
+        ("screen", "rendering cost depends on resolution"),
+        ("seed", "a different seed is a different simulation"),
+        ("fixed_timestep_s", "a different timestep is a different workload"),
+        ("max_steps_per_frame", "a different step cap is a different workload"),
+        ("measured_frames", "percentiles over different window lengths are not comparable"),
+    ):
+        values = {r.get(column) for r in eligible if r.get(column) is not None}
+        if len(values) > 1:
+            raise SystemExit(f"These rows mix {column} {sorted(values)}: {explanation}.")
 
     points: dict[tuple[int, str], Point] = {}
     for row in eligible:
@@ -275,14 +288,15 @@ def replace_between(text: str, begin: str, end: str, body: str, path: Path) -> s
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("--csv", required=True, type=Path, help="benchmark summary CSV")
+    parser.add_argument("--csv", required=True, type=Path, nargs="+",
+                        help="benchmark summary CSV(s); several are combined if they share an environment")
     parser.add_argument("--readme", type=Path, default=Path("README.md"))
     parser.add_argument("--allow-editor", action="store_true", help="tabulate non-player rows (not results)")
     parser.add_argument("--check", action="store_true", help="exit 1 if the README is not up to date")
     args = parser.parse_args()
 
     points, meta = load_points(args.csv, args.allow_editor)
-    csv_name = args.csv.as_posix()
+    csv_name = ", ".join(p.as_posix() for p in args.csv)
     table = build_table(points, csv_name)
     crossing = build_crossing(points, csv_name)
 
