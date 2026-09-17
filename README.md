@@ -157,7 +157,7 @@ Two techniques this project originally sketched are not implemented. The reasons
 
 **Burst parallelisation** is the obvious next step, and the groundwork is already done rather than merely intended: `com.unity.burst`, `com.unity.collections` and `com.unity.mathematics` have been in the manifest since day 1, agent state is already parallel arrays of structs rather than objects, and the step is already two-phase and order-independent — it reads the previous step's state and writes into a separate buffer, which is the shape `IJobParallelFor` wants. The honest reason it is absent is time. It would also be the first technique where bit-identical output does not come for free: parallel reduction of a float sum depends on partition order, so the separation accumulation would need the same ascending-index discipline the spatial hash already follows, applied across threads rather than within one.
 
-The measurements say where the remaining cost is. At 18,000 agents the frame is 14.21 ms, of which the simulation step is 12.65 ms and presentation is 0.10 ms. Rendering is no longer worth attacking. The step is — and it is single-threaded on a sixteen-thread machine.
+The measurements say where the remaining cost is. At 18,000 agents the frame is 14.21 ms, of which the simulation step is 12.65 ms and presentation is 0.15 ms. Rendering is no longer worth attacking. The step is — and it is single-threaded on a sixteen-thread machine.
 
 ## Not in scope
 
