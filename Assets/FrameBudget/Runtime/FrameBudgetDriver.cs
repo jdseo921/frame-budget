@@ -37,6 +37,8 @@ namespace FrameBudget
         private UniformGridIndex uniformGridIndex;
         private TechniqueCombination activeTechniques;
         private NaiveAgentPresenter presenter;
+        private InstancedAgentPresenter instancedPresenter;
+        private Material instancedMaterial;
         private FrameMetrics metrics;
         private FrameBudgetHud hud;
         private BenchmarkRunner benchmark;
@@ -126,6 +128,13 @@ namespace FrameBudget
             uniformGridIndex = new UniformGridIndex();
             activeTechniques = config.CurrentTechniques;
             presenter = new NaiveAgentPresenter(agentMaterial);
+
+            // A runtime copy of the same material with the instancing variant enabled, so the
+            // two presenters draw the same mesh with the same shader and the same colour and
+            // differ only in how the draws are submitted. Made here rather than as a second
+            // asset so that the scene needs no extra reference.
+            instancedMaterial = new Material(agentMaterial) { name = agentMaterial.name + " (instanced)", enableInstancing = true };
+            instancedPresenter = new InstancedAgentPresenter(instancedMaterial);
             metrics = new FrameMetrics();
             hud = new FrameBudgetHud();
             benchmark = new BenchmarkRunner();
@@ -222,7 +231,18 @@ namespace FrameBudget
             stopwatch.Restart();
             using (PresentMarker.Auto())
             {
-                presenter.Present(world, activeTechniques.zeroAlloc);
+                if (activeTechniques.gpuInstancing)
+                {
+                    // The naive presenter's GameObjects must stop rendering, or the same agents
+                    // would be drawn twice and the draw-call count would measure both paths.
+                    presenter.SetVisible(false);
+                    instancedPresenter.Present(world);
+                }
+                else
+                {
+                    presenter.SetVisible(true);
+                    presenter.Present(world, activeTechniques.zeroAlloc);
+                }
             }
             stopwatch.Stop();
 
@@ -247,6 +267,8 @@ namespace FrameBudget
         private void OnDestroy()
         {
             presenter?.Dispose();
+            instancedPresenter?.Dispose();
+            if (instancedMaterial != null) Destroy(instancedMaterial);
             metrics?.Dispose();
             hud?.Dispose();
         }
@@ -359,6 +381,7 @@ namespace FrameBudget
         {
             world.Respawn(config, count);
             presenter.Rebuild(count);
+            instancedPresenter.Rebuild(count);
             accumulator = 0.0;
             StepsLastFrame = 0;
             SimMsLastFrame = 0.0;
