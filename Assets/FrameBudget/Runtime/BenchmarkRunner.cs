@@ -275,13 +275,19 @@ namespace FrameBudget
                       + " | gc " + (metrics.GcAllocatedValid ? gcStats : "n/a") + " B | draw " + (metrics.DrawCallsValid ? drawStats : "n/a")
                       + " | state " + stateHash.ToString("X16"));
 
-            run++;
-            if (run >= config.runsPerAgentCount)
+            // Interleaved, not blocked: advance the agent count every point and the run index only
+            // after a full pass, giving A B C D  A B C D  ... instead of A A A A  B B B B. This is
+            // measured on a laptop, and a blocked order would map the thermal ramp straight onto the
+            // configuration axis - the last configuration would look slower than it is, by an amount
+            // indistinguishable from its real cost. Interleaving spreads drift across every
+            // configuration and turns what remains into visible run-to-run spread. See docs/METHOD.md.
+            sweepIndex++;
+            if (sweepIndex >= sweep.Length)
             {
-                run = 0;
-                sweepIndex++;
+                sweepIndex = 0;
+                run++;
             }
-            if (sweepIndex < sweep.Length) BeginPoint();
+            if (run < config.runsPerAgentCount) BeginPoint();
             else Finish();
         }
 
