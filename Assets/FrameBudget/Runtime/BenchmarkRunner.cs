@@ -24,10 +24,11 @@ namespace FrameBudget
             "config,agent_count,run,techniques,spatialHash,zeroAlloc,tickBudget,gpuInstancing,burstJobs," +
             "seed,fixed_timestep_s,stepping_mode,max_steps_per_frame,warmup_frames,measured_frames," +
             "steps_in_window,sim_steps_total,capped_frames,dropped_sim_seconds," +
+            "gc_collections_in_window,frames_with_collection," +
             "frame_ms_median,frame_ms_p95,main_thread_ms_median,main_thread_ms_p95,sim_ms_per_frame_median,sim_ms_per_frame_p95," +
             "step_ms_median,step_ms_p95,present_ms_median,present_ms_p95,other_ms_median,other_ms_p95," +
             "gc_alloc_bytes_median,gc_alloc_bytes_p95,draw_calls_median,draw_calls_p95,setpass_calls_median,setpass_calls_p95," +
-            "state_hash,invalid_counters";
+            "state_hash,invalid_counters,allocation_source";
 
         /// <summary>Directory the CSVs are written to; defaults to persistentDataPath when absent.</summary>
         public const string OutputDirArg = "-frameBudgetOutput";
@@ -60,7 +61,11 @@ namespace FrameBudget
         private int stepCount;
         private double droppedAtStart;
 
+        /// <summary>Collections counted inside the measured window only, so warm-up collections are not charged to the point.</summary>
+        private int collectionsInWindow;
 
+        /// <summary>Measured frames whose allocation figure was discarded because a collection ran inside them.</summary>
+        private int framesWithCollection;
 
         private readonly StringBuilder summary = new StringBuilder();
         private readonly StringBuilder frames = new StringBuilder();
@@ -159,6 +164,8 @@ namespace FrameBudget
             frameCounter = 0;
             measured = 0;
             stepCount = 0;
+            collectionsInWindow = 0;
+            framesWithCollection = 0;
             Status = "BENCHMARK · " + agents + " agents · run " + (run + 1) + "/" + config.runsPerAgentCount + " · warm-up " + warmupFrames + " frames";
         }
 
@@ -190,6 +197,8 @@ namespace FrameBudget
                     setPassCalls[k] = s.SetPassCalls;
                     stepsPerFrame[k] = s.Steps;
                     capHit[k] = s.StepCapHit;
+                    collectionsInWindow += s.GcCollections;
+                    if (driver.Metrics.GcAllocatedValid && s.GcAllocatedBytes < 0) framesWithCollection++;
                     measured++;
                     if (measured >= frameMs.Length) FinishPoint();
                     break;
@@ -221,7 +230,7 @@ namespace FrameBudget
                       .Append(F(frameMs[i])).Append(',').Append(metrics.MainThreadValid ? F(mainThreadMs[i]) : "").Append(',')
                       .Append(F(simMs[i])).Append(',').Append(stepsPerFrame[i]).Append(',').Append(capHit[i] ? 1 : 0).Append(',')
                       .Append(F(presentMs[i])).Append(',').Append(F(otherMs[i])).Append(',')
-                      .Append(metrics.GcAllocatedValid ? I(gcBytes[i]) : "").Append(',')
+                      .Append(metrics.GcAllocatedValid && gcBytes[i] >= 0 ? I(gcBytes[i]) : "").Append(',')
                       .Append(metrics.DrawCallsValid ? I(drawCalls[i]) : "").Append(',')
                       .Append(metrics.SetPassCallsValid ? I(setPassCalls[i]) : "").Append('\n');
             }
@@ -232,7 +241,14 @@ namespace FrameBudget
             Percentiles.MedianAndP95(otherMs, measured, out double otherMed, out double otherP95);
             Percentiles.MedianAndP95(stepMs, stepCount, out double stepMed, out double stepP95);
             string mainStats = metrics.MainThreadValid ? Stats(mainThreadMs, measured, false) : ",";
-            string gcStats = metrics.GcAllocatedValid ? Stats(gcBytes, measured, true) : ",";
+            // Frames whose allocation was invalidated by a collection hold -1 and must not reach the
+            // percentile pass; compact the valid ones to the front and summarise only those.
+            int validGc = 0;
+            for (int i = 0; i < measured; i++)
+            {
+                if (gcBytes[i] >= 0) gcBytes[validGc++] = gcBytes[i];
+            }
+            string gcStats = metrics.GcAllocatedValid && validGc > 0 ? Stats(gcBytes, validGc, true) : ",";
             string drawStats = metrics.DrawCallsValid ? Stats(drawCalls, measured, true) : ",";
             string setPassStats = metrics.SetPassCallsValid ? Stats(setPassCalls, measured, true) : ",";
 
@@ -261,6 +277,8 @@ namespace FrameBudget
                    .Append(totalSteps).Append(',')
                    .Append(cappedFrames).Append(',')
                    .Append(F(dropped)).Append(',')
+                   .Append(collectionsInWindow).Append(',')
+                   .Append(framesWithCollection).Append(',')
                    .Append(F(frameMed)).Append(',').Append(F(frameP95)).Append(',')
                    .Append(mainStats).Append(',')
                    .Append(F(simMed)).Append(',').Append(F(simP95)).Append(',')
@@ -271,7 +289,8 @@ namespace FrameBudget
                    .Append(drawStats).Append(',')
                    .Append(setPassStats).Append(',')
                    .Append(stateHash.ToString("X16")).Append(',')
-                   .Append(Q(metrics.InvalidCounters)).Append('\n');
+                   .Append(Q(metrics.InvalidCounters)).Append(',')
+                   .Append(Q(metrics.AllocationSource)).Append('\n');
 
             Debug.Log("[FrameBudget] " + agents + " agents, run " + runNumber + ": frame " + F(frameMed) + " / p95 " + F(frameP95)
                       + " ms | step " + F(stepMed) + " / p95 " + F(stepP95) + " ms (" + stepCount + " steps in window, " + totalSteps + " since spawn, " + cappedFrames + " capped frames)"

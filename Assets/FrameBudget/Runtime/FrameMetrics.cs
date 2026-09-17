@@ -20,7 +20,8 @@ namespace FrameBudget
         public double OtherMs;          // FrameMs - SimMs - PresentMs: rendering, engine, editor overhead
         public int Steps;
         public bool StepCapHit;
-        public long GcAllocatedBytes;
+        public long GcAllocatedBytes;   // bytes allocated during the frame; -1 when unmeasured or invalidated by a collection
+        public int GcCollections;       // generation-0 collections that ran during the frame
         public long DrawCalls;
         public long SetPassCalls;
     }
@@ -39,20 +40,34 @@ namespace FrameBudget
         public const int WindowSize = 120;
         public const double BudgetMs = 1000.0 / 60.0;
 
-        public const string GcAllocatedCounter = "GC Allocated In Frame";
         public const string DrawCallsCounter = "Draw Calls Count";
         public const string SetPassCallsCounter = "SetPass Calls Count";
         public const string MainThreadCounter = "Main Thread";
 
-        private ProfilerRecorder gcAllocatedRecorder;
         private ProfilerRecorder drawCallsRecorder;
         private ProfilerRecorder setPassCallsRecorder;
         private ProfilerRecorder mainThreadRecorder;
 
+        /// <summary>Allocation counter reading at the previous frame boundary; -1 until the first sample.</summary>
+        private long lastAllocationSample = -1L;
+
+        /// <summary>Generation-0 collection count at the previous frame boundary; -1 until the first sample.</summary>
+        private int lastCollectionCount = -1;
+
+        /// <summary>Measured frames whose heap delta was discarded because a collection ran inside them.</summary>
+        public int FramesWithCollection { get; private set; }
+
+        /// <summary>Generation-0 collections seen since the last <see cref="ClearWindows"/>.</summary>
+        public int CollectionsObserved { get; private set; }
+
+        /// <summary>True when a runtime allocation counter passed verification (see <see cref="AllocationProbe"/>), not when a profiler counter resolved.</summary>
         public bool GcAllocatedValid { get; private set; }
         public bool DrawCallsValid { get; private set; }
         public bool SetPassCallsValid { get; private set; }
         public bool MainThreadValid { get; private set; }
+
+        /// <summary>Which runtime API the allocation numbers came from, for the log and the CSV.</summary>
+        public string AllocationSource => AllocationProbe.SourceName;
 
         /// <summary>Semicolon-separated names of counters that failed to resolve, empty when all resolved. Written into the CSV.</summary>
         public string InvalidCounters { get; private set; } = "";
@@ -73,14 +88,25 @@ namespace FrameBudget
         public FrameMetrics()
         {
             var invalid = new List<string>();
-            gcAllocatedRecorder = Start(ProfilerCategory.Memory, GcAllocatedCounter, invalid, out bool gcValid);
             drawCallsRecorder = Start(ProfilerCategory.Render, DrawCallsCounter, invalid, out bool drawValid);
             setPassCallsRecorder = Start(ProfilerCategory.Render, SetPassCallsCounter, invalid, out bool setPassValid);
             mainThreadRecorder = Start(ProfilerCategory.Internal, MainThreadCounter, invalid, out bool mainValid);
-            GcAllocatedValid = gcValid;
             DrawCallsValid = drawValid;
             SetPassCallsValid = setPassValid;
             MainThreadValid = mainValid;
+
+            // Allocation does not come from a profiler counter: day 2 established that the counter
+            // does not exist in a release player. It comes from a runtime API that is verified here,
+            // on this build, by allocating a known number of bytes and checking the counter moved.
+            GcAllocatedValid = AllocationProbe.Verify(out string allocationReport);
+            Debug.Log("[FrameBudget] Allocation counter verification:\n    " + allocationReport.Replace("\n", "\n    "));
+            if (!GcAllocatedValid)
+            {
+                invalid.Add("runtime/allocation");
+                Debug.LogError("[FrameBudget] No allocation counter could be verified on this build. Allocation will be reported as n/a and left empty in the CSV - it is not zero.");
+            }
+            AllocationProbe.ReleaseProbeBuffer();
+
             InvalidCounters = string.Join(";", invalid);
             LogCountersOfInterest();
         }
@@ -145,10 +171,36 @@ namespace FrameBudget
                 PresentMs = presentMsPreviousFrame,
                 StepCapHit = stepCapHitPreviousFrame,
                 MainThreadMs = MainThreadValid ? mainThreadRecorder.LastValue / 1_000_000.0 : double.NaN,
-                GcAllocatedBytes = GcAllocatedValid ? gcAllocatedRecorder.LastValue : -1,
                 DrawCalls = DrawCallsValid ? drawCallsRecorder.LastValue : -1,
                 SetPassCalls = SetPassCallsValid ? setPassCallsRecorder.LastValue : -1,
             };
+
+            // Allocation across the frame that just finished. When the counter reports heap size
+            // rather than cumulative allocation, a frame in which a collection ran has a delta that
+            // is not allocation - the heap may even have shrunk - so that frame's bytes are
+            // discarded and counted instead. See AllocationProbe for why this is the only counter
+            // available in a release IL2CPP player.
+            if (GcAllocatedValid)
+            {
+                long allocNow = AllocationProbe.Sample();
+                int collectionsNow = AllocationProbe.CollectionCount();
+                s.GcCollections = lastCollectionCount >= 0 && collectionsNow >= lastCollectionCount
+                    ? collectionsNow - lastCollectionCount
+                    : 0;
+
+                bool collectionInvalidated = !AllocationProbe.IsCumulative && s.GcCollections > 0;
+                s.GcAllocatedBytes = (lastAllocationSample >= 0 && allocNow >= lastAllocationSample && !collectionInvalidated)
+                    ? allocNow - lastAllocationSample
+                    : -1;
+
+                lastAllocationSample = allocNow;
+                lastCollectionCount = collectionsNow;
+            }
+            else
+            {
+                s.GcAllocatedBytes = -1;
+                s.GcCollections = 0;
+            }
             if (s.HasFrameTime)
             {
                 s.FrameMs = (now - lastFrameStartTicks) * 1000.0 / Stopwatch.Frequency;
@@ -163,7 +215,12 @@ namespace FrameBudget
                 PresentMs.Add(s.PresentMs);
                 OtherMs.Add(s.OtherMs);
                 if (MainThreadValid) MainThreadMs.Add(s.MainThreadMs);
-                if (GcAllocatedValid) GcBytes.Add(s.GcAllocatedBytes);
+                if (GcAllocatedValid)
+                {
+                    CollectionsObserved += s.GcCollections;
+                    if (s.GcAllocatedBytes >= 0) GcBytes.Add(s.GcAllocatedBytes);
+                    else FramesWithCollection++;
+                }
                 if (DrawCallsValid) DrawCalls.Add(s.DrawCalls);
                 if (SetPassCallsValid) SetPassCalls.Add(s.SetPassCalls);
             }
@@ -187,11 +244,12 @@ namespace FrameBudget
             GcBytes.Clear();
             DrawCalls.Clear();
             SetPassCalls.Clear();
+            FramesWithCollection = 0;
+            CollectionsObserved = 0;
         }
 
         public void Dispose()
         {
-            gcAllocatedRecorder.Dispose();
             drawCallsRecorder.Dispose();
             setPassCallsRecorder.Dispose();
             mainThreadRecorder.Dispose();

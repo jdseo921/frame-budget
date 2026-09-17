@@ -18,6 +18,9 @@ namespace FrameBudget
     {
         public const int MaxAgents = 200000;
 
+        /// <summary>Runs the instrument self-test instead of the benchmark, then exits.</summary>
+        public const string SelfTestArg = "-frameBudgetSelfTest";
+
         [SerializeField] private SimConfig config;
 
         [Tooltip("Configs selectable by name from the command line with -frameBudgetConfig <asset name>.")]
@@ -120,6 +123,13 @@ namespace FrameBudget
         {
             if (!enabled) return;
 
+            if (CommandLine.HasFlag(SelfTestArg))
+            {
+                BenchmarkLaunch.MarkUnattended();
+                RunInstrumentSelfTest();
+                return;
+            }
+
             if (BenchmarkLaunch.TryGetRequest(out string configName))
             {
                 SimConfig cfg = ResolveConfig(configName);
@@ -218,6 +228,65 @@ namespace FrameBudget
             presenter?.Dispose();
             metrics?.Dispose();
             hud?.Dispose();
+        }
+
+        /// <summary>
+        /// Checks the instrument itself rather than the simulation, in whichever build it is run in.
+        /// The allocation counter is a runtime API whose behaviour under IL2CPP stripping cannot be
+        /// assumed, so this allocates several known block sizes and requires the counter to report
+        /// each of them. Run with -frameBudgetSelfTest; the process exits with 0 on pass, 1 on fail.
+        /// </summary>
+        private void RunInstrumentSelfTest()
+        {
+            var sb = new System.Text.StringBuilder();
+            sb.Append("[FrameBudget] INSTRUMENT SELF-TEST\n");
+            sb.Append("  environment:        ").Append(RunEnvironment.Describe()).Append('\n');
+            sb.Append("  pacing:             ").Append(RunGuard.Describe()).Append('\n');
+            sb.Append("  allocation source:  ").Append(metrics.AllocationSource).Append("  verified=").Append(metrics.GcAllocatedValid).Append('\n');
+            sb.Append("  draw / SetPass:     ").Append(metrics.DrawCallsValid && metrics.SetPassCallsValid ? "counters resolved" : "NOT AVAILABLE").Append('\n');
+
+            // When no counter verified, survey every candidate this runtime might offer, so the
+            // failure report says what IS available rather than only what is not.
+            if (!metrics.GcAllocatedValid)
+            {
+                sb.Append("  --- allocation counter survey (allocating 1 MiB between two samples) ---\n");
+                foreach (var candidate in AllocationProbe.SurveyCandidates())
+                {
+                    sb.Append("  ").Append(candidate).Append('\n');
+                }
+            }
+
+            bool pass = metrics.GcAllocatedValid;
+            if (metrics.GcAllocatedValid)
+            {
+                // Several sizes, because a counter that reports a fixed number, or reports only
+                // large allocations, would pass a single-size check and still be useless.
+                foreach (int kilobytes in new[] { 16, 256, 4096 })
+                {
+                    int bytes = kilobytes * 1024;
+                    long before = AllocationProbe.Sample();
+                    var block = new byte[bytes];
+                    block[0] = 1;
+                    block[bytes - 1] = 2;
+                    long after = AllocationProbe.Sample();
+                    long delta = after - before;
+                    bool ok = delta >= bytes && delta <= bytes + 4096;
+                    if (!ok) pass = false;
+                    sb.Append("  allocated ").Append(bytes).Append(" B -> counter moved ").Append(delta)
+                      .Append(" B  ").Append(ok ? "OK" : "MISMATCH")
+                      .Append("  (block length ").Append(block.Length).Append(")\n");
+                }
+
+                long idleBefore = AllocationProbe.Sample();
+                long idleAfter = AllocationProbe.Sample();
+                sb.Append("  two samples with nothing between -> ").Append(idleAfter - idleBefore)
+                  .Append(" B (a non-zero value here is the counter's own overhead)\n");
+            }
+
+            sb.Append(pass ? "  RESULT: PASS" : "  RESULT: FAIL");
+            if (pass) Debug.Log(sb.ToString());
+            else Debug.LogError(sb.ToString());
+            BenchmarkLaunch.ExitIfUnattended(pass ? 0 : 1);
         }
 
         /// <summary>Runs one simulation step and returns its cost in milliseconds, recording it with both the HUD window and the benchmark.</summary>

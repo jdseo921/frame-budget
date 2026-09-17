@@ -22,6 +22,12 @@ namespace FrameBudget
         /// <summary>True when the benchmark was requested from the command line or the CLI entry point.</summary>
         public static bool Unattended { get; private set; }
 
+        /// <summary>Marks the process as unattended so it exits when its work is done, for command-line paths other than the benchmark itself.</summary>
+        public static void MarkUnattended()
+        {
+            Unattended = true;
+        }
+
         public static bool TryGetRequest(out string configName)
         {
             configName = CommandLine.GetString(ConfigArg, null);
