@@ -226,6 +226,30 @@ must have identical `state_hash`. If they do not, the simulation is not determin
 before/after comparison in this repository is meaningless, because the configurations would not be
 doing the same work.
 
+### Technique equivalence: an optimisation must change the cost and not the result
+
+From day 3 the same hash carries a second, stronger claim. A faster neighbour query that returns a
+different set of neighbours is not an optimisation, it is a different simulation — and it fails in
+the most flattering direction available, because the fewer neighbours an index returns the better it
+scores. Timing cannot detect that. Only comparing the *result* can.
+
+So every technique that alters the simulation's arithmetic must produce a **bit-identical**
+`state_hash` to its control, at the same seed, agent count and step count. Two things make that
+achievable rather than aspirational:
+
+- **Identical neighbour sets**, asserted by the equivalence tests in `Assets/Tests` across several
+  agent counts and radii, including a radius smaller than one cell, a radius spanning several cells,
+  agents exactly on cell boundaries, and agents pinned to the world edge.
+- **Identical accumulation order.** The separation force is a sum of floating-point vectors and
+  float addition is not associative, so visiting the same neighbours in a different order produces a
+  different sum, a different velocity, and after a few hundred steps a visibly different simulation.
+  Both implementations therefore return neighbours in ascending index order: the brute-force scan by
+  construction, the grid by sorting, since it gathers from cells in grid order.
+
+When this holds, the speed-up is unambiguous — the two runs computed the same thing, so the only
+thing that changed is what it cost. When it does not hold, the comparison is void regardless of how
+good the timing looks.
+
 Note what the check cannot be: rows are *not* expected to agree when `sim_steps_total` differs. How
 many steps a run executes depends on how much wall-clock time elapsed during its measured frames, so
 two runs of the same configuration ordinarily advance the simulation by different amounts. The check
