@@ -19,10 +19,11 @@ namespace FrameBudget
         private enum Phase { Idle, WarmUp, Measure, Finished }
 
         public const string SummaryHeader =
-            "timestamp_utc,unity_version,platform,is_editor,is_batchmode,device_model,cpu,gpu,screen,config,agent_count,run,techniques," +
-            "spatialHash,zeroAlloc,tickBudget,gpuInstancing,burstJobs,fixed_timestep_s,max_steps_per_frame,warmup_frames,measured_frames," +
-            "steps_in_window,sim_steps_total,capped_frames,dropped_sim_seconds," +
+            "timestamp_utc," + RunEnvironment.CsvHeader + "," +
             "vsync_count,target_frame_rate,run_in_background,display_refresh_hz," +
+            "config,agent_count,run,techniques,spatialHash,zeroAlloc,tickBudget,gpuInstancing,burstJobs," +
+            "seed,fixed_timestep_s,max_steps_per_frame,warmup_frames,measured_frames," +
+            "steps_in_window,sim_steps_total,capped_frames,dropped_sim_seconds," +
             "frame_ms_median,frame_ms_p95,main_thread_ms_median,main_thread_ms_p95,sim_ms_per_frame_median,sim_ms_per_frame_p95," +
             "step_ms_median,step_ms_p95,present_ms_median,present_ms_p95,other_ms_median,other_ms_p95," +
             "gc_alloc_bytes_median,gc_alloc_bytes_p95,draw_calls_median,draw_calls_p95,setpass_calls_median,setpass_calls_p95," +
@@ -60,6 +61,8 @@ namespace FrameBudget
         private readonly StringBuilder frames = new StringBuilder();
         private DateTime startedUtc;
 
+        /// <summary>Machine and build columns; constant for the process, so captured once per sweep.</summary>
+        private string environmentRow = "";
 
         public bool IsRunning => phase == Phase.WarmUp || phase == Phase.Measure;
         public bool IsFinished => phase == Phase.Finished;
@@ -113,6 +116,7 @@ namespace FrameBudget
             frames.Clear();
             frames.Append(FramesHeader).Append('\n');
             startedUtc = DateTime.UtcNow;
+            environmentRow = RunEnvironment.CsvRow();
             sweepIndex = 0;
             run = 0;
 
@@ -120,7 +124,13 @@ namespace FrameBudget
             Debug.Log("[FrameBudget] Benchmark started: config='" + cfg.name + "' techniques=" + cfg.TechniqueLabel
                       + " sweep=[" + string.Join(",", sweep) + "] runs=" + cfg.runsPerAgentCount
                       + " warmup=" + warmupFrames + " measured=" + m + " dt=" + cfg.fixedTimestep.ToString("R", CultureInfo.InvariantCulture)
-                      + " maxSteps/frame=" + cfg.maxStepsPerFrame + " | " + RunGuard.Describe());
+                      + " maxSteps/frame=" + cfg.maxStepsPerFrame);
+            Debug.Log("[FrameBudget] Environment: " + RunEnvironment.Describe());
+            Debug.Log("[FrameBudget] Frame pacing: " + RunGuard.Describe());
+            if (Debug.isDebugBuild)
+            {
+                Debug.LogWarning("[FrameBudget] This is a DEVELOPMENT build. Its instrumentation overhead is measured as if it were the code's cost; build without development mode for results.");
+            }
             if (Application.isBatchMode)
             {
                 Debug.LogWarning("[FrameBudget] Running in -batchmode: there is no Game view, so nothing is rendered. Draw calls and SetPass calls will read 0 and frame time excludes rendering. "
@@ -222,14 +232,11 @@ namespace FrameBudget
             string setPassStats = metrics.SetPassCallsValid ? Stats(setPassCalls, measured, true) : ",";
 
             summary.Append(Q(DateTime.UtcNow.ToString("o", CultureInfo.InvariantCulture))).Append(',')
-                   .Append(Q(Application.unityVersion)).Append(',')
-                   .Append(Q(Application.platform.ToString())).Append(',')
-                   .Append(Application.isEditor ? 1 : 0).Append(',')
-                   .Append(Application.isBatchMode ? 1 : 0).Append(',')
-                   .Append(Q(SystemInfo.deviceModel)).Append(',')
-                   .Append(Q(SystemInfo.processorType)).Append(',')
-                   .Append(Q(SystemInfo.graphicsDeviceName)).Append(',')
-                   .Append(Q(Screen.width + "x" + Screen.height)).Append(',')
+                   .Append(environmentRow).Append(',')
+                   .Append(RunGuard.VSyncCount).Append(',')
+                   .Append(RunGuard.TargetFrameRate).Append(',')
+                   .Append(RunGuard.RunInBackground ? 1 : 0).Append(',')
+                   .Append(F(RunGuard.RefreshRateHz)).Append(',')
                    .Append(Q(configName)).Append(',')
                    .Append(agents).Append(',')
                    .Append(runNumber).Append(',')
@@ -239,6 +246,7 @@ namespace FrameBudget
                    .Append(config.tickBudget ? 1 : 0).Append(',')
                    .Append(config.gpuInstancing ? 1 : 0).Append(',')
                    .Append(config.burstJobs ? 1 : 0).Append(',')
+                   .Append(config.seed).Append(',')
                    .Append(config.fixedTimestep.ToString("R", CultureInfo.InvariantCulture)).Append(',')
                    .Append(config.maxStepsPerFrame).Append(',')
                    .Append(warmupFrames).Append(',')
@@ -247,10 +255,6 @@ namespace FrameBudget
                    .Append(totalSteps).Append(',')
                    .Append(cappedFrames).Append(',')
                    .Append(F(dropped)).Append(',')
-                   .Append(RunGuard.VSyncCount).Append(',')
-                   .Append(RunGuard.TargetFrameRate).Append(',')
-                   .Append(RunGuard.RunInBackground ? 1 : 0).Append(',')
-                   .Append(F(RunGuard.RefreshRateHz)).Append(',')
                    .Append(F(frameMed)).Append(',').Append(F(frameP95)).Append(',')
                    .Append(mainStats).Append(',')
                    .Append(F(simMed)).Append(',').Append(F(simP95)).Append(',')
