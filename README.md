@@ -5,7 +5,8 @@ A single-scene Unity benchmark that simulates a crowd of simple steering agents 
 ## What is here
 
 - **The instrument.** Frame time is measured two ways, neither of which is `Time.deltaTime`: a `Stopwatch` interval between consecutive frame starts, and the profiler's main-thread counter. Simulation time is a `Stopwatch` and a `ProfilerMarker` around the fixed-timestep step, kept separate from total frame time. GC allocated per frame, draw calls and SetPass calls come from `ProfilerRecorder` counters whose names are verified to resolve at start-up; a counter that fails to resolve is reported as *n/a*, never as zero. Everything is reported as a median and a tail value (the ninety-fifth percentile) over a rolling window. There are no means anywhere: means hide spikes, and spikes are the point.
-- **The naive baseline.** Agent state lives in parallel arrays of structs, not in per-agent MonoBehaviours. The simulation steps on a fixed timestep accumulated from frame time, never on frame time directly, so the work done per step does not depend on the frame rate. Everything else is deliberately unoptimised and labelled as such in the code: an all-pairs neighbour query, one GameObject per agent, `GetComponent` inside the per-agent loop, LINQ in the hot path, and HUD text rebuilt by string concatenation every frame. Each of these is a control condition that a later technique removes.
+- **The naive baseline.** Agent state lives in parallel arrays of structs, not in per-agent MonoBehaviours. In benchmark mode the simulation runs exactly one fixed-timestep step per frame, so frame cost and step cost describe the same work in every row. Everything else is deliberately unoptimised and labelled as such in the code: an all-pairs neighbour query, one GameObject per agent, `GetComponent` inside the per-agent loop, LINQ in the hot path, and HUD text rebuilt by string concatenation every frame. Each of these is a control condition that a later technique removes.
+- **The techniques.** Each is a runtime flag measured against its own control inside a single sweep, interleaved with it, so a comparison never spans a thermal ramp. A technique that alters the simulation's arithmetic must produce a **bit-identical** `state_hash` to its control at the same seed and step count: a faster neighbour query that returns a different set of neighbours is not an optimisation but a different simulation, and it fails flatteringly, so timing alone cannot be the acceptance test. Implemented so far: **spatialHash**, a uniform grid replacing the all-pairs scan. Still to come: zeroAlloc, tickBudget, gpuInstancing, burstJobs.
 - **The HUD.** IMGUI, sized to be readable in a screen recording, drawn in its own column beside the world view rather than over it: agent count, simulation time, frame time, GC per frame, draw calls, SetPass calls, and a rolling frame-time graph with the sixty-frames-per-second budget drawn across it.
 - **The benchmark mode.** Sweeps agent counts from a `SimConfig` asset, discards warm-up frames, records the measured frames and writes two CSVs — a summary with medians and tails per (agent count, technique combination, run), and every measured frame so the summary can be audited. Runs of a configuration are interleaved rather than blocked, so thermal drift on a laptop spreads across configurations instead of landing on one. `-frameBudgetOutput <dir>` sends them into `results/`; without it they go to `Application.persistentDataPath`. Before measuring anything it asserts that vsync and the frame cap are off, and aborts the run rather than reporting numbers that describe the display.
 
@@ -48,12 +49,16 @@ Every cell below is filled from the benchmark CSV by `tools/update_readme_table.
 
 | Agents | Techniques | Runs | Frame ms (median) | Frame ms (run spread) | Frame ms (p95) | Sim step ms (median) | Sim step ms (p95) | GC alloc / frame | Draw calls | SetPass calls |
 |-------:|------------|-----:|------------------:|:----------------------|---------------:|---------------------:|--------------------:|-----------------:|-----------:|--------------:|
-| 500 | baseline | 5 | 3.05 | 2.85 – 3.35 | 4.68 | 1.72 | 2.34 | 120.0 KB | 516 | 13 |
-| 2,000 | baseline | 5 | 28.85 | 28.28 – 29.00 | 33.26 | 26.33 | 30.21 |  | 1,992 | 28 |
-| 5,000 | baseline | 5 | 168.17 | 164.23 – 171.06 | 400.97 | 163.22 | 171.57 |  | 4,947 | 58 |
-| 10,000 | baseline | 5 | 649.48 | 648.19 – 668.51 | 666.72 | 642.77 | 659.98 |  | 9,852 | 108 |
+| 1,000 | baseline | 5 | 8.87 | 7.82 – 8.98 | 11.19 | 7.09 | 9.05 | 228.0 KB | 1,015 | 18 |
+| 2,000 | baseline | 5 | 30.23 | 27.22 – 32.84 | 33.82 | 27.76 | 31.07 |  | 2,006 | 28 |
+| 5,000 | baseline | 5 | 171.89 | 166.00 – 181.61 | 178.45 | 167.81 | 173.61 |  | 4,980 | 58 |
+| 10,000 | baseline | 5 | 664.54 | 644.39 – 673.77 | 678.19 | 657.63 | 672.48 |  | 9,917 | 108 |
+| 1,000 | spatialHash | 5 | 1.84 | 1.76 – 1.86 | 2.47 | 0.22 | 0.63 | 124.0 KB | 1,014 | 18 |
+| 2,000 | spatialHash | 5 | 2.91 | 2.80 – 3.09 | 3.59 | 0.91 | 1.17 | 324.0 KB | 2,008 | 28 |
+| 5,000 | spatialHash | 5 | 6.89 | 6.69 – 7.12 | 8.01 | 3.48 | 4.20 |  | 4,989 | 58 |
+| 10,000 | spatialHash | 5 | 16.81 | 15.88 – 17.12 | 20.61 | 11.29 | 14.27 |  | 9,955 | 108 |
 
-*Generated by `tools/update_readme_table.py` from `results/benchmark_BaselineSweep_20260917_075712.csv` — do not edit by hand.*
+*Generated by `tools/update_readme_table.py` from `results/benchmark_SpatialHashSweep_20260917_083414.csv` — do not edit by hand.*
 
 <!-- RESULTS_TABLE:END -->
 
@@ -65,8 +70,15 @@ Two columns deserve a warning. **GC alloc / frame is empty**, and that means *no
 
 <!-- BUDGET_CROSSING:BEGIN -->
 
-- **16.7 ms (60 fps)** — crossed between **500 agents** (3.05 ms) and **2,000 agents** (28.85 ms). The sweep does not sample between those two counts, so the exact crossing point is bracketed, not measured.
-- **33.3 ms (30 fps)** — crossed between **2,000 agents** (28.85 ms) and **5,000 agents** (168.17 ms). The sweep does not sample between those two counts, so the exact crossing point is bracketed, not measured.
+**baseline**
+
+- **16.7 ms (60 fps)** — crossed between **1,000 agents** (8.87 ms) and **2,000 agents** (30.23 ms). The sweep does not sample between those two counts, so the exact crossing point is bracketed, not measured.
+- **33.3 ms (30 fps)** — crossed between **2,000 agents** (30.23 ms) and **5,000 agents** (171.89 ms). The sweep does not sample between those two counts, so the exact crossing point is bracketed, not measured.
+
+**spatialHash**
+
+- **16.7 ms (60 fps)** — crossed between **5,000 agents** (6.89 ms) and **10,000 agents** (16.81 ms). The sweep does not sample between those two counts, so the exact crossing point is bracketed, not measured.
+- **33.3 ms (30 fps)** — not crossed at any measured agent count. The largest measured point, 10,000 agents, has a median frame time of 16.81 ms.
 
 <!-- BUDGET_CROSSING:END -->
 

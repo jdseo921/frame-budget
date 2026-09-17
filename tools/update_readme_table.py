@@ -242,17 +242,28 @@ def build_table(points: list[Point], csv_name: str) -> str:
 
 
 def build_crossing(points: list[Point], csv_name: str) -> str:
-    """Report where the measured medians bracket each budget. Never interpolates between points."""
+    """Report where the measured medians bracket each budget, per technique. Never interpolates."""
+    techniques = sorted({p.techniques for p in points}, key=lambda t: (t != "baseline", t))
+    if not techniques:
+        return "No rows in " + csv_name + "."
+    blocks = []
+    for technique in techniques:
+        body = _crossing_for(points, technique)
+        blocks.append(f"**{technique}**\n\n{body}" if len(techniques) > 1 else body)
+    return "\n\n".join(blocks)
+
+
+def _crossing_for(points: list[Point], technique: str) -> str:
     lines = []
-    baseline = sorted([p for p in points if p.techniques == "baseline"], key=lambda p: p.agents)
-    if not baseline:
-        return "No baseline rows in " + csv_name + "."
+    selected = sorted([p for p in points if p.techniques == technique], key=lambda p: p.agents)
 
     measured = []
-    for point in baseline:
+    for point in selected:
         med, _, _ = point.summary("frame_ms_median")
         if med is not None:
             measured.append((point.agents, med))
+    if not measured:
+        return f"- No frame-time medians recorded for {technique}."
 
     for label, budget in (("16.7 ms (60 fps)", BUDGET_60_MS), ("33.3 ms (30 fps)", BUDGET_30_MS)):
         below = [(a, m) for a, m in measured if m <= budget]

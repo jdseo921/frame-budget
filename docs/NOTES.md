@@ -196,6 +196,73 @@ explanation and not a finding. It does not affect any claim made today, because 
 results table and every speed-up measured in half two comes from the current code measured against
 itself.
 
+### Day 3, half two: the spatial hash
+
+**The speedup grows with agent count, but nothing like as fast as O(n²) → O(n·k) predicts, and the
+reason is the world, not the grid.** Step cost improves 32.1× at 1,000 agents, 30.5× at 2,000,
+48.2× at 5,000 and 58.2× at 10,000. Doubling the agent count should double the advantage if the
+grid were genuinely linear against a quadratic baseline. It does not: from 1,000 to 2,000 the
+speedup actually *falls* slightly (×0.95), and from 5,000 to 10,000 it grows ×1.21 against a
+predicted ×2.0.
+
+The textbook claim quietly assumes `k`, the number of agents in the searched neighbourhood, is
+constant. Here it cannot be. The world is a fixed 200×200 square, so doubling the agent count
+doubles the density, and a neighbourhood of fixed radius therefore holds twice as many agents.
+`k` is proportional to `n`, which makes `O(n·k)` quadratic too. The grid is not changing the
+complexity class at all — it is winning a large constant factor, by testing the agents in nine cells
+instead of all of them, and the ratio of those two areas is what the speedup is really measuring.
+
+What growth there is comes from the opposite direction: per-query fixed costs. Allocating a `List`,
+sorting it, and rebuilding the grid once per step are all charged whether the query finds one
+neighbour or twenty, so at 1,000 agents — where a neighbourhood holds barely one other agent — they
+dominate, and they amortise as density rises. That is why the curve rises from 32× to 58× rather
+than staying flat.
+
+This is worth knowing before day 5. If a future technique's claim rests on "the spatial hash made it
+linear", that claim is false in this benchmark's geometry. Making it actually linear would mean
+growing the world with the agent count, which would be a different experiment, and changing the
+workload mid-week to make a number look better is exactly what this project exists not to do.
+
+**Ten thousand agents at sixty frames per second is very nearly reached, and "very nearly" is the
+honest word.** With the hash, 10,000 agents measures 16.81 ms — against a 16.67 ms budget. It misses
+by 0.14 ms, about one per cent. The temptation to describe that as "10,000 agents at 60 fps" should
+be resisted until a later technique actually puts it under the line.
+
+**The bit-identical check passed at every agent count**, which is what makes the speedup claim
+usable: 1,000 / 2,000 / 5,000 / 10,000 agents all produce the same `state_hash` from both indexes at
+360 steps. The two runs computed the same floating-point state; only the cost differed. Given a
+58× improvement, that check is doing real work — an index that silently dropped neighbours would
+look similar in the timing and would have failed here immediately.
+
+**Collections roughly halved but did not disappear, which is the techniques staying separable.**
+Gen-0 collections over 300 measured frames fall from 375 to 145 at 1,000 agents and from 4,448 to
+2,014 at 10,000. The grid finds fewer neighbours so the `List` it returns is smaller, but it still
+allocates one per query, and the brute-force control still runs its LINQ chain. That is deliberate:
+if the grid had returned a pooled buffer, this sweep would have measured the spatial hash and the
+allocation fix together and neither could have been attributed. Removing the allocation is day 4's
+job, and the interaction between the two is worth more than either alone.
+
+### Things I do not trust from today
+
+**The GPU frame-time counter is not credible at long frame times.** Rendering is identical between
+the two arms — same agents, same material, same draw calls to within noise — so GPU time should be
+the same. It is not: at 10,000 agents the baseline reports 20.5 ms of GPU time and the spatial hash
+4.0 ms, and at 5,000 agents 11.8 ms against 1.6 ms. A five-fold difference in GPU work that does not
+exist. The pattern tracks CPU frame time almost exactly, which suggests the counter is reporting an
+interval spanning the whole frame — including the long stretches where the GPU is idle waiting for a
+664 ms CPU frame — rather than GPU busy time. The conclusion drawn from it yesterday still stands,
+because it was drawn in the regime where it is plausible: at small frame times the GPU reads a
+fraction of a millisecond, far below the CPU, and collapsing draw calls thirtyfold moved frame time
+by under two per cent. But the absolute numbers should not be quoted, and this needs understanding
+before the instancing day leans on them.
+
+**The first point of a sweep executes one step fewer than every later point.** It shows up as
+`sim_steps_total` of 359 against 360 everywhere else, in both today's sweeps. Harmless to the timing,
+but it means the first point cannot be hash-compared with the same configuration measured elsewhere,
+which is why the 500-agent pair in the determinism check came back as "cannot compare" rather than
+as a match. I have not tracked down the exact cause — it is somewhere in the ordering of the first
+respawn against the first warm-up frame — and it should be fixed rather than documented forever.
+
 ### Not investigated today
 
 The `Render / GPU Frame Time` counter exists in the release player and is not being collected.
