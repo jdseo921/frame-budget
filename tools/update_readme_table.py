@@ -171,7 +171,10 @@ def load_points(csv_paths: list[Path], allow_editor: bool) -> tuple[list[Point],
         ("stepping_mode", "rows stepped under different rules measure different amounts of work per frame"),
         ("allocation_source", "allocation figures from different counters mean different things"),
     ):
-        values = {r.get(column) for r in eligible if r.get(column) is not None}
+        # A row that lacks the column entirely is treated as its own distinct value, not skipped.
+        # Otherwise a CSV written before the column existed merges silently with one written after,
+        # which is exactly the case the check is here to catch.
+        values = {(r[column] if column in r and r[column] is not None else "(column absent)") for r in eligible}
         if len(values) > 1:
             raise SystemExit(f"These rows mix {column} {sorted(values)}: {explanation}.")
 

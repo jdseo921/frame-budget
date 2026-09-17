@@ -160,6 +160,42 @@ is the quantity I want — whole-frame cost — but it means the first measured 
 inherits the tail of the last warm-up frame. One frame in 300; noted for completeness rather than
 concern.
 
+### Day 3 addendum: the re-baseline came out faster, and most of it was day 2's thermal drift
+
+Stepping once per frame should not have changed the cost of a step — the work per step is identical,
+only the decision of when steps happen changed. It changed anyway, by 6.7% at 2,000 agents and
+11.7% at 10,000. That is well past "a few percent", so it needed an explanation before anything else
+was built on top of it.
+
+Most of it is not a speed-up at all; it is day 2 having been measured on a hotter machine. The
+per-run step medians at 10,000 agents tell the story:
+
+| | run 1 | run 2 | run 3 | run 4 | run 5 | spread |
+|---|---:|---:|---:|---:|---:|---:|
+| day 2 | 668.7 | 690.2 | 743.6 | 732.8 | 727.6 | 11.2% |
+| day 3 | 642.7 | 642.8 | 641.6 | 647.0 | 661.6 | 3.1% |
+
+Day 2's runs climb and then sit high; day 3's are flat. Comparing each sweep's *coldest* run rather
+than its median — 668.7 against 641.6 — the gap is 4.1%, not 11.7%.
+
+Why day 2 ran hotter is itself a consequence of the old stepping rule. Under it, light agent counts
+did not step on most frames, so 500 agents rendered at about 780 frames per second, burning CPU flat
+out between the occasional step. Every light point in the interleaved sweep was therefore a heating
+element, and the heavy points that followed inherited the heat. One step per frame drops that to
+about 330 frames per second at 500 agents, and the whole sweep runs cooler and flatter. The tighter
+spread is a real improvement in the instrument, not a faster simulation.
+
+That leaves roughly 4% unexplained by temperature. The likely cause is that extracting the neighbour
+query into `BruteForceIndex.Query` changed the shape of the LINQ closure: the old code's lambda
+captured `i` from the enclosing `for` loop and `pos` from the loop body, which needs two chained
+compiler-generated display classes per agent per step, while the extracted method captures
+everything in one scope and needs one. With gen-0 collections running at 14.5 per frame at 10,000
+agents, halving a per-agent allocation is not a small lever. I have not isolated this — doing so
+would mean resurrecting the deleted step function for a comparison run — so it is a leading
+explanation and not a finding. It does not affect any claim made today, because every number in the
+results table and every speed-up measured in half two comes from the current code measured against
+itself.
+
 ### Not investigated today
 
 The `Render / GPU Frame Time` counter exists in the release player and is not being collected.
