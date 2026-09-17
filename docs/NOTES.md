@@ -244,6 +244,21 @@ job, and the interaction between the two is worth more than either alone.
 
 ### Things I do not trust from today
 
+> **Correction, 2026-09-18 (day 4).** "Not credible" was too strong, and the direction of the error
+> was wrong. Checking the same sweep at *every* agent count rather than only the largest: at 1,000
+> and 2,000 agents the two configurations report near-identical GPU times — 0.51 against 0.70 ms,
+> and 0.96 against 0.94 ms — which is exactly what identical rendering should produce. The
+> divergence appears only at 5,000 and 10,000 agents, which is precisely where the baseline's CPU
+> frame stretches to 166 ms and 657 ms.
+>
+> So the counter is measuring correctly; what changes is the GPU. Idle for more than ninety-five per
+> cent of a 657 ms frame, an integrated GPU drops into a low-power state and has to clock back up
+> when work arrives, so identical draw calls genuinely take longer to execute. The number is true
+> and the comparison is meaningless. The rule that follows is in METHOD.md section 9: `gpu_ms` may
+> be quoted as evidence that the GPU has headroom, never as a delta between configurations whose
+> CPU frame times differ by an order of magnitude. Inferred from existing data rather than isolated
+> experimentally, but the prohibition holds whichever mechanism it is.
+
 **The GPU frame-time counter is not credible at long frame times.** Rendering is identical between
 the two arms — same agents, same material, same draw calls to within noise — so GPU time should be
 the same. It is not: at 10,000 agents the baseline reports 20.5 ms of GPU time and the spatial hash

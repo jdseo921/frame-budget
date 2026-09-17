@@ -288,10 +288,26 @@ because doing so would invalidate every comparison made before the switch.
 
 Stating the boundary is part of the method. This harness does **not** measure:
 
-- **GPU time.** Everything reported is CPU-side: the frame interval, main-thread time, simulation
-  time, and counts of draw and SetPass calls submitted. A `GPU Frame Time` counter exists on this
-  Unity version but is not collected, and no claim about GPU cost is made anywhere in this
-  repository.
+- **GPU time as a comparison between configurations.** `gpu_ms` *is* collected, and it is useful for
+  one thing only: checking whether the GPU is anywhere near being the limit. It must **never** be
+  used to compare two configurations whose CPU frame times differ by an order of magnitude, and the
+  data says why. At 5,000 and 10,000 agents the brute-force and spatial-hash runs render identical
+  scenes — the same draw calls, the same SetPass calls, and a bit-identical `state_hash`, so the
+  agents are in exactly the same positions — yet the counter reports 11.8 ms against 1.6 ms, and
+  20.5 ms against 4.0 ms. Identical work cannot cost five times as much.
+
+  The explanation is visible in the same table. At 1,000 and 2,000 agents, where both
+  configurations finish a frame in single-digit or low-double-digit milliseconds, the two report
+  near-identical GPU times (0.51 against 0.70 ms, and 0.96 against 0.94 ms) exactly as identical
+  rendering should. The divergence appears only once the CPU frame stretches to 166 ms and 657 ms.
+  A GPU that is idle for more than ninety-five per cent of a frame drops into a low-power state and
+  clocks back up when work arrives, so the same draw calls genuinely take longer — the counter is
+  not lying, it is reporting a GPU running slowly because nothing was asking it to run fast.
+
+  This was diagnosed from existing measurements rather than isolated experimentally, so the
+  mechanism is inferred; the prohibition does not depend on which mechanism it is. Quote `gpu_ms`
+  as evidence that the GPU has headroom, and only between configurations whose frame times are
+  within the same rough magnitude.
 - **Memory over time.** `gc_alloc_bytes` is allocation *per frame*; it is not heap size, not peak
   working set, and says nothing about fragmentation or about whether memory grows over a long
   session.
