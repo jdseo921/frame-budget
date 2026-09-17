@@ -125,6 +125,59 @@ namespace FrameBudget.Tests
             }
         }
 
+        /// <summary>
+        /// The zeroAlloc path writes neighbours into one buffer reused across every agent and every
+        /// step, so a query that returns fewer neighbours than the previous one leaves stale indices
+        /// behind it. Reading past the returned count, or failing to respect it, is the classic way
+        /// to break a buffer-reuse optimisation - and it corrupts the simulation rather than
+        /// crashing, which is worse. This deliberately reuses a single buffer across all agents, in
+        /// descending order of expected neighbour count, so that any leakage past the count shows up.
+        /// </summary>
+        [Test]
+        public void QueryIntoMatchesQuery_WithOneBufferReusedAcrossEveryAgent(
+            [Values(64, 400)] int agentCount,
+            [Values(2f, 8f)] float neighbourRadius)
+        {
+            SimConfig config = MakeConfig(40f, neighbourRadius, 0f);
+            try
+            {
+                var world = new AgentWorld();
+                world.Respawn(config, agentCount);
+
+                foreach (ISpatialIndex index in new ISpatialIndex[] { new BruteForceIndex(), new UniformGridIndex() })
+                {
+                    index.Rebuild(world, config);
+
+                    // Visit the agents with the most neighbours first, so later shorter queries are
+                    // the ones that would expose stale tail entries.
+                    var order = new List<int>();
+                    for (int i = 0; i < agentCount; i++) order.Add(i);
+                    order.Sort((a, b) => index.Query(world, b, neighbourRadius).Count
+                                        .CompareTo(index.Query(world, a, neighbourRadius).Count));
+
+                    var buffer = new int[agentCount];
+                    foreach (int i in order)
+                    {
+                        List<int> expected = index.Query(world, i, neighbourRadius);
+                        int count = index.QueryInto(world, i, neighbourRadius, buffer);
+
+                        Assert.That(count, Is.EqualTo(expected.Count),
+                            index.Name + ": agent " + i + " returned a different neighbour count");
+                        for (int k = 0; k < count; k++)
+                        {
+                            Assert.That(buffer[k], Is.EqualTo(expected[k]),
+                                index.Name + ": agent " + i + " differs at position " + k
+                                + " (stale buffer contents leaking past the count?)");
+                        }
+                    }
+                }
+            }
+            finally
+            {
+                Object.DestroyImmediate(config);
+            }
+        }
+
         [Test]
         public void GridQueryIsInAscendingIndexOrder()
         {
