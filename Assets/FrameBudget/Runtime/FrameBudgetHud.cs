@@ -22,7 +22,7 @@ namespace FrameBudget
         private const int LabelWidth = 14;
         private const int ColumnChars = 10;
         private const string NotResolved = "n/a - counter did not resolve";
-        private const string Controls = "Up/Dn +-100 · PgUp/PgDn +-1000 · R respawn\nB benchmark · H hide HUD";
+        private const string Controls = "1/2/3 spatialHash · zeroAlloc · gpuInstancing\nUp/Dn +-100 · PgUp/PgDn +-1000 · R respawn\nB benchmark · H hide HUD";
 
         private static readonly Func<double, string> MsFormat = v => v.ToString("F2") + " ms";
         private static readonly Func<double, string> CountFormat = v => v.ToString("F0");

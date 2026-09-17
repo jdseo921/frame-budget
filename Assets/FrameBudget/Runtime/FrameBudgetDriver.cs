@@ -349,6 +349,14 @@ namespace FrameBudget
             return stepMs;
         }
 
+        /// <summary>Flips one technique flag and respawns, so the before and after simulate the same agents.</summary>
+        private void ToggleTechnique(ref bool flag, string name)
+        {
+            flag = !flag;
+            Debug.Log("[FrameBudget] " + name + " " + (flag ? "ON" : "OFF") + " -> " + activeTechniques.Label);
+            RequestRespawn();
+        }
+
         /// <summary>Respawns with a new agent count at the start of the next frame.</summary>
         public void RequestAgentCount(int count)
         {
@@ -404,6 +412,14 @@ namespace FrameBudget
             if (Input.GetKeyDown(KeyCode.PageDown)) RequestAgentCount(AgentCount - 1000);
             if (Input.GetKeyDown(KeyCode.R)) RequestRespawn();
             if (Input.GetKeyDown(KeyCode.B)) StartBenchmark();
+
+            // Technique toggles, so the difference can be seen rather than only read. Each respawns
+            // from the same seed, which keeps the comparison honest on screen for the same reason
+            // the benchmark does it: the two configurations then simulate the same agents.
+            // Disabled while a sweep is running, because there the sweep owns the flags.
+            if (Input.GetKeyDown(KeyCode.Alpha1)) ToggleTechnique(ref activeTechniques.spatialHash, "spatialHash");
+            if (Input.GetKeyDown(KeyCode.Alpha2)) ToggleTechnique(ref activeTechniques.zeroAlloc, "zeroAlloc");
+            if (Input.GetKeyDown(KeyCode.Alpha3)) ToggleTechnique(ref activeTechniques.gpuInstancing, "gpuInstancing");
         }
 
         private SimConfig ResolveConfig(string name)

@@ -31,7 +31,7 @@ A single-scene Unity benchmark that simulates a crowd of simple steering agents 
 
 ## Running it
 
-Open the project with the Unity version recorded in `ProjectSettings/ProjectVersion.txt`, open `Assets/FrameBudget/Scenes/FrameBudget.unity`, press Play. Change the agent count with the arrow and page keys or the on-screen controls; press **B** to start the benchmark from the assigned config, **R** to respawn, **H** to hide the HUD (which also shows you the HUD's own cost).
+Open the project with the Unity version recorded in `ProjectSettings/ProjectVersion.txt`, open `Assets/FrameBudget/Scenes/FrameBudget.unity`, press Play. Press **1**, **2** and **3** to toggle the spatial hash, the allocation-free path and instanced drawing, and watch the frame-time graph move; each toggle respawns from the same seed, so the before and after simulate the same agents. Change the agent count with the arrow and page keys or the on-screen controls; press **B** to start the benchmark from the assigned config, **R** to respawn, **H** to hide the HUD (which also shows you the HUD's own cost).
 
 ### Producing results
 
