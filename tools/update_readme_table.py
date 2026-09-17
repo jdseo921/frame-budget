@@ -297,13 +297,24 @@ def build_headline(points: list[Point], agents: int) -> str:
 
 def build_crossing(points: list[Point], csv_name: str) -> str:
     """Report where the measured medians bracket each budget, per technique. Never interpolates."""
-    techniques = sorted({p.techniques for p in points}, key=lambda t: (t != "baseline", t))
+    techniques = {p.techniques for p in points}
     if not techniques:
         return "No rows in " + csv_name + "."
-    blocks = []
-    for technique in techniques:
-        body = _crossing_for(points, technique)
-        blocks.append(f"**{technique}**\n\n{body}" if len(techniques) > 1 else body)
+    if len(techniques) == 1:
+        return _crossing_for(points, next(iter(techniques)))
+
+    # Lead with the configuration the project actually ships and the control it is measured
+    # against. The intermediate combinations exist to show the technique interaction, not to be
+    # read one at a time, so they go under a fold.
+    best = max(techniques, key=lambda t: len(t.split("+")) if t != "baseline" else 0)
+    rest = sorted(techniques - {best, "baseline"})
+
+    blocks = [f"**`{best}`** — the configuration this project ships\n\n{_crossing_for(points, best)}"]
+    if "baseline" in techniques:
+        blocks.append(f"**`baseline`** — the naive control, for contrast\n\n{_crossing_for(points, 'baseline')}")
+    if rest:
+        inner = "\n\n".join(f"**`{t}`**\n\n{_crossing_for(points, t)}" for t in rest)
+        blocks.append("<details>\n<summary>All configurations</summary>\n\n" + inner + "\n\n</details>")
     return "\n\n".join(blocks)
 
 

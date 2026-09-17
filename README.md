@@ -117,30 +117,35 @@ Three columns deserve a note.
 
 <!-- BUDGET_CROSSING:BEGIN -->
 
-**baseline**
-
-- **16.7 ms (60 fps)** — crossed between **1,000 agents** (9.05 ms) and **2,000 agents** (31.78 ms). The sweep does not sample between those two counts, so the exact crossing point is bracketed, not measured.
-- **33.3 ms (30 fps)** — crossed between **2,000 agents** (31.78 ms) and **5,000 agents** (174.24 ms). The sweep does not sample between those two counts, so the exact crossing point is bracketed, not measured.
-
-**spatialHash**
-
-- **16.7 ms (60 fps)** — crossed between **5,000 agents** (6.71 ms) and **10,000 agents** (16.68 ms). The sweep does not sample between those two counts, so the exact crossing point is bracketed, not measured.
-- **33.3 ms (30 fps)** — not crossed at any measured agent count. The largest measured point, 10,000 agents, has a median frame time of 16.68 ms.
-
-**spatialHash+zeroAlloc**
-
-- **16.7 ms (60 fps)** — not crossed at any measured agent count. The largest measured point, 10,000 agents, has a median frame time of 10.24 ms.
-- **33.3 ms (30 fps)** — not crossed at any measured agent count. The largest measured point, 10,000 agents, has a median frame time of 10.24 ms.
-
-**spatialHash+zeroAlloc+gpuInstancing**
+**`spatialHash+zeroAlloc+gpuInstancing`** — the configuration this project ships
 
 - **16.7 ms (60 fps)** — crossed between **18,000 agents** (14.21 ms) and **20,000 agents** (16.95 ms). The sweep does not sample between those two counts, so the exact crossing point is bracketed, not measured.
 - **33.3 ms (30 fps)** — not crossed at any measured agent count. The largest measured point, 24,000 agents, has a median frame time of 23.46 ms.
 
-**zeroAlloc**
+**`baseline`** — the naive control, for contrast
+
+- **16.7 ms (60 fps)** — crossed between **1,000 agents** (9.05 ms) and **2,000 agents** (31.78 ms). The sweep does not sample between those two counts, so the exact crossing point is bracketed, not measured.
+- **33.3 ms (30 fps)** — crossed between **2,000 agents** (31.78 ms) and **5,000 agents** (174.24 ms). The sweep does not sample between those two counts, so the exact crossing point is bracketed, not measured.
+
+<details>
+<summary>All configurations</summary>
+
+**`spatialHash`**
+
+- **16.7 ms (60 fps)** — crossed between **5,000 agents** (6.71 ms) and **10,000 agents** (16.68 ms). The sweep does not sample between those two counts, so the exact crossing point is bracketed, not measured.
+- **33.3 ms (30 fps)** — not crossed at any measured agent count. The largest measured point, 10,000 agents, has a median frame time of 16.68 ms.
+
+**`spatialHash+zeroAlloc`**
+
+- **16.7 ms (60 fps)** — not crossed at any measured agent count. The largest measured point, 10,000 agents, has a median frame time of 10.24 ms.
+- **33.3 ms (30 fps)** — not crossed at any measured agent count. The largest measured point, 10,000 agents, has a median frame time of 10.24 ms.
+
+**`zeroAlloc`**
 
 - **16.7 ms (60 fps)** — crossed between **2,000 agents** (4.48 ms) and **5,000 agents** (19.69 ms). The sweep does not sample between those two counts, so the exact crossing point is bracketed, not measured.
 - **33.3 ms (30 fps)** — crossed between **5,000 agents** (19.69 ms) and **10,000 agents** (71.44 ms). The sweep does not sample between those two counts, so the exact crossing point is bracketed, not measured.
+
+</details>
 
 <!-- BUDGET_CROSSING:END -->
 
