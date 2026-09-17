@@ -1,8 +1,41 @@
+using System;
 using System.Text;
 using UnityEngine;
 
 namespace FrameBudget
 {
+    /// <summary>
+    /// One point on the technique axis. Kept as a serialisable struct rather than reusing the
+    /// config's own flags so that a single sweep can measure several combinations against each
+    /// other, interleaved, without mutating the asset it was launched from.
+    /// </summary>
+    [Serializable]
+    public struct TechniqueCombination
+    {
+        public bool spatialHash;
+        public bool zeroAlloc;
+        public bool tickBudget;
+        public bool gpuInstancing;
+        public bool burstJobs;
+
+        /// <summary>"baseline", or the '+'-joined names of the enabled techniques.</summary>
+        public string Label
+        {
+            get
+            {
+                var sb = new StringBuilder();
+                if (spatialHash) sb.Append("spatialHash+");
+                if (zeroAlloc) sb.Append("zeroAlloc+");
+                if (tickBudget) sb.Append("tickBudget+");
+                if (gpuInstancing) sb.Append("gpuInstancing+");
+                if (burstJobs) sb.Append("burstJobs+");
+                if (sb.Length == 0) return "baseline";
+                sb.Length -= 1;
+                return sb.ToString();
+            }
+        }
+    }
+
     /// <summary>
     /// Everything a run needs in order to be reproduced. One asset describes one run:
     /// same asset, same simulation, same workload. Technique flags all default to false;
@@ -36,6 +69,9 @@ namespace FrameBudget
         [Tooltip("Agents are labelled with a tick bucket at spawn. The naive baseline updates every agent every step regardless; the tickBudget technique will update one bucket per step.")]
         [Min(1)] public int tickBucketCount = 4;
 
+        [Tooltip("Side length of a uniform-grid cell in world units, used when the spatialHash technique is on. Zero means use the neighbour radius, which makes the searched neighbourhood exactly one ring of cells. Smaller cells mean more cells to visit but fewer agents rejected per cell; the query widens its ring automatically so a smaller cell size stays correct.")]
+        [Min(0f)] public float spatialHashCellSize;
+
         [Header("Benchmark")]
         [Tooltip("Frames discarded at the start of every measured point (absorbs spawn cost, JIT and cache warm-up). At least one frame is always discarded so the spawn frame itself is never measured.")]
         [Min(1)] public int warmupFrameCount = 60;
@@ -55,6 +91,15 @@ namespace FrameBudget
         public bool tickBudget;
         public bool gpuInstancing;
         public bool burstJobs;
+
+        public TechniqueCombination CurrentTechniques => new TechniqueCombination
+        {
+            spatialHash = spatialHash,
+            zeroAlloc = zeroAlloc,
+            tickBudget = tickBudget,
+            gpuInstancing = gpuInstancing,
+            burstJobs = burstJobs,
+        };
 
         /// <summary>"baseline" or the '+'-joined names of the enabled techniques. Used in the HUD and the CSV.</summary>
         public string TechniqueLabel

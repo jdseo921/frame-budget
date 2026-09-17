@@ -33,6 +33,9 @@ namespace FrameBudget
         private readonly Stopwatch stopwatch = new Stopwatch();
 
         private AgentWorld world;
+        private BruteForceIndex bruteForceIndex;
+        private UniformGridIndex uniformGridIndex;
+        private TechniqueCombination activeTechniques;
         private NaiveAgentPresenter presenter;
         private FrameMetrics metrics;
         private FrameBudgetHud hud;
@@ -66,6 +69,21 @@ namespace FrameBudget
 
         /// <summary>Which stepping rule is in force; recorded in every CSV row so rows taken under different rules are never compared.</summary>
         public string SteppingMode => benchmark != null && benchmark.IsRunning ? BenchmarkSteppingMode : InteractiveSteppingMode;
+
+        /// <summary>Technique flags currently in force. The benchmark sets these per point; interactive play uses the config's own flags.</summary>
+        public TechniqueCombination ActiveTechniques => activeTechniques;
+
+        /// <summary>The neighbour query the next step will use, chosen by the active technique flags.</summary>
+        public ISpatialIndex ActiveIndex => activeTechniques.spatialHash ? (ISpatialIndex)uniformGridIndex : bruteForceIndex;
+
+        /// <summary>Name of the active index, recorded in the CSV so a row says which implementation produced it.</summary>
+        public string ActiveIndexName => ActiveIndex != null ? ActiveIndex.Name : "";
+
+        /// <summary>Switches the technique flags for the next point. Takes effect on the next respawn.</summary>
+        public void SetTechniques(TechniqueCombination techniques)
+        {
+            activeTechniques = techniques;
+        }
 
         private void Awake()
         {
@@ -104,6 +122,9 @@ namespace FrameBudget
             }
 
             world = new AgentWorld();
+            bruteForceIndex = new BruteForceIndex();
+            uniformGridIndex = new UniformGridIndex();
+            activeTechniques = config.CurrentTechniques;
             presenter = new NaiveAgentPresenter(agentMaterial);
             metrics = new FrameMetrics();
             hud = new FrameBudgetHud();
@@ -296,7 +317,7 @@ namespace FrameBudget
             stopwatch.Restart();
             using (SimulationStepMarker.Auto())
             {
-                NaiveSimulationStep.Step(world, config, dt);
+                SimulationStep.Step(world, config, dt, ActiveIndex);
             }
             stopwatch.Stop();
 
@@ -329,6 +350,7 @@ namespace FrameBudget
             string problem = cfg.Validate();
             if (problem != null) throw new InvalidOperationException("SimConfig '" + cfg.name + "' is invalid: " + problem);
             config = cfg;
+            activeTechniques = cfg.CurrentTechniques;
             LogConfig();
             Spawn(cfg.agentCount);
         }
