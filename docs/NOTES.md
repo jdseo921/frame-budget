@@ -301,6 +301,52 @@ does not. That is why the README headline states two measured numbers and their 
 dividing them into a speed-up ratio — a ratio spanning those two sweeps would carry the thermal
 difference silently inside it.
 
+### Ship day: what the two p95 outliers turned out to be
+
+Two rows had tails far out of line with everything else — `baseline` at 5,000 agents (median 174 ms,
+p95 ~504 ms) and `zeroAlloc` at 10,000 agents (median 71 ms, p95 ~493 ms) — where every other row's
+p95 sits within about 1.3× of its median. The per-frame CSVs are committed, so this was answerable
+rather than guessable.
+
+**It is not warm-up leaking past the discard count.** That was the hypothesis worth eliminating
+first, because it would have been a harness bug requiring a re-run. The affected frames are at
+indices like 73, 215, 225, 269 and 7, 23, 39, 69, 99 — scattered across the window, with exactly one
+instance at index 0 across ten runs. Warm-up leakage would cluster at the start.
+
+**It is not in our code.** Decomposing a stalled frame: simulation time is normal (171.7 ms against
+a 171.9 ms median; 64.5 against 63.2), presentation is normal (0.57 ms against 0.44), and the entire
+excess — 347 ms and 459 ms respectively — sits in `other`, the residual between frame time and the
+two things we measure directly. `main_thread_ms` tracks `frame_ms`, so the profiler sees the same
+stall on the same thread. GPU time is normal. It is not garbage collection either: the zeroAlloc
+spike frames report ordinary byte deltas with no collection at all.
+
+**It is periodic, and it pads rather than adds.** The interval between consecutive stalls has a
+median of 1,564 ms in one configuration and 1,554 ms in the other — essentially identical despite
+workloads differing by a factor of two and a half. And a stalled frame lands at a near-constant
+total of ~500 ms in both cases: 174 + 335, or 71 + 436. It is not adding a fixed cost, it is
+extending the frame to a fixed deadline.
+
+**The distribution across configurations is the tell.** Stalls per second of measured time:
+0.49 for baseline/5,000, 0.54 for zeroAlloc/10,000, and exactly zero everywhere else — including
+25 seconds of spatialHash/10,000 and 15 seconds of the final configuration, where a 1.5-second
+period should have produced ten or more. And zero for baseline/10,000 across 1,036 seconds of
+measurement, where frames already take 670 ms and a pad to 500 ms would be invisible. So the
+phenomenon only manifests in the band where frames are long enough to be caught but short enough to
+be extended.
+
+I have not identified the mechanism, and I am not going to name one I cannot demonstrate. What is
+established is that it is environmental, outside the simulation and presentation, periodic in
+wall-clock time, and invisible to the median. The data stays as measured; the README says so under
+the table. This is also the clearest practical argument for the day-1 decision to report medians and
+percentiles rather than means — a mean over baseline/5,000 would have been dragged upward by roughly
+thirty per cent by an event that has nothing to do with the code.
+
+**A gap this investigation exposed:** the per-frame CSV recorded `config` and `agent_count` but not
+which technique combination a row belonged to, so in a sweep with four combinations its rows were
+ambiguous. I could only separate them by knowing the interleave order and checking each block's
+median against the summary. The column is now written; the files already committed predate it, and
+results/README.md explains how to disambiguate them.
+
 ### Things I do not trust from today
 
 > **Correction, 2026-09-18 (day 4).** "Not credible" was too strong, and the direction of the error

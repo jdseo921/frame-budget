@@ -58,9 +58,16 @@ legitimately `0`.
 ## `benchmark_<config>_<stamp>_frames.csv` — every measured frame
 
 One row per measured frame, so the summary can be audited rather than trusted: `config`,
-`agent_count`, `run`, `frame` (index within the run), `frame_ms`, `main_thread_ms`, `sim_ms`,
-`steps`, `step_cap_hit`, `present_ms`, `other_ms`, `gc_alloc_bytes`, `draw_calls`,
-`setpass_calls`. Warm-up frames are not in this file — they are discarded before measurement
-begins.
+`techniques`, `agent_count`, `run`, `frame` (index within the run), `frame_ms`, `main_thread_ms`,
+`gpu_ms`, `sim_ms`, `steps`, `step_cap_hit`, `present_ms`, `other_ms`, `gc_alloc_bytes`,
+`draw_calls`, `setpass_calls`, `batches`. Warm-up frames are not in this file — they are discarded
+before measurement begins.
+
+**Files written before 2026-09-18 have no `techniques` column.** In a sweep measuring several
+technique combinations, their rows are therefore ambiguous: each (agent count, run) appears once per
+combination. They can still be separated, because the runner writes points in measurement order —
+within one (agent count, run), the consecutive blocks of `frame` indices 0..n appear in the order the
+combinations are listed in the config's `techniqueSweep`. Check each block's median against the
+matching summary row to confirm the mapping before relying on it.
 
 Empty cells mean "not measured", never zero.

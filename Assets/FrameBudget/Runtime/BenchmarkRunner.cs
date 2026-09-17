@@ -36,7 +36,7 @@ namespace FrameBudget
         public const string OutputDirArg = "-frameBudgetOutput";
 
         public const string FramesHeader =
-            "config,agent_count,run,frame,frame_ms,main_thread_ms,gpu_ms,sim_ms,steps,step_cap_hit,present_ms,other_ms,gc_alloc_bytes,draw_calls,setpass_calls,batches";
+            "config,techniques,agent_count,run,frame,frame_ms,main_thread_ms,gpu_ms,sim_ms,steps,step_cap_hit,present_ms,other_ms,gc_alloc_bytes,draw_calls,setpass_calls,batches";
 
         private Phase phase = Phase.Idle;
         private SimConfig config;
@@ -243,7 +243,7 @@ namespace FrameBudget
             for (int i = 0; i < measured; i++)
             {
                 if (capHit[i]) cappedFrames++;
-                frames.Append(Q(configName)).Append(',').Append(agents).Append(',').Append(runNumber).Append(',').Append(i).Append(',')
+                frames.Append(Q(configName)).Append(',').Append(Q(combo.Label)).Append(',').Append(agents).Append(',').Append(runNumber).Append(',').Append(i).Append(',')
                       .Append(F(frameMs[i])).Append(',').Append(metrics.MainThreadValid ? F(mainThreadMs[i]) : "").Append(',')
                       .Append(metrics.GpuFrameTimeValid ? F(gpuMs[i]) : "").Append(',')
                       .Append(F(simMs[i])).Append(',').Append(stepsPerFrame[i]).Append(',').Append(capHit[i] ? 1 : 0).Append(',')
