@@ -22,6 +22,7 @@ namespace FrameBudget
             "timestamp_utc,unity_version,platform,is_editor,is_batchmode,device_model,cpu,gpu,screen,config,agent_count,run,techniques," +
             "spatialHash,zeroAlloc,tickBudget,gpuInstancing,burstJobs,fixed_timestep_s,max_steps_per_frame,warmup_frames,measured_frames," +
             "steps_in_window,sim_steps_total,capped_frames,dropped_sim_seconds," +
+            "vsync_count,target_frame_rate,run_in_background,display_refresh_hz," +
             "frame_ms_median,frame_ms_p95,main_thread_ms_median,main_thread_ms_p95,sim_ms_per_frame_median,sim_ms_per_frame_p95," +
             "step_ms_median,step_ms_p95,present_ms_median,present_ms_p95,other_ms_median,other_ms_p95," +
             "gc_alloc_bytes_median,gc_alloc_bytes_p95,draw_calls_median,draw_calls_p95,setpass_calls_median,setpass_calls_p95," +
@@ -59,6 +60,7 @@ namespace FrameBudget
         private readonly StringBuilder frames = new StringBuilder();
         private DateTime startedUtc;
 
+
         public bool IsRunning => phase == Phase.WarmUp || phase == Phase.Measure;
         public bool IsFinished => phase == Phase.Finished;
         public string Status { get; private set; } = "";
@@ -72,6 +74,18 @@ namespace FrameBudget
             if (IsRunning)
             {
                 Debug.LogWarning("[FrameBudget] Benchmark already running; ignoring second start.");
+                return;
+            }
+
+            // Nothing may pace a frame. A run that cannot prove this produces no numbers at all.
+            string clamp = RunGuard.ApplyAndVerify();
+            if (clamp != null)
+            {
+                Debug.LogError("[FrameBudget] ABORTING the benchmark: a frame-rate clamp is still in effect, so frame times would describe the display, not the code.\n"
+                               + "[FrameBudget] " + clamp + "\n"
+                               + "[FrameBudget] Turn vsync off in Project Settings > Quality for the active level and remove any target frame rate, then run again.");
+                Status = "BENCHMARK ABORTED · frame-rate clamp in effect";
+                BenchmarkLaunch.ExitIfUnattended(3);
                 return;
             }
 
@@ -106,7 +120,7 @@ namespace FrameBudget
             Debug.Log("[FrameBudget] Benchmark started: config='" + cfg.name + "' techniques=" + cfg.TechniqueLabel
                       + " sweep=[" + string.Join(",", sweep) + "] runs=" + cfg.runsPerAgentCount
                       + " warmup=" + warmupFrames + " measured=" + m + " dt=" + cfg.fixedTimestep.ToString("R", CultureInfo.InvariantCulture)
-                      + " maxSteps/frame=" + cfg.maxStepsPerFrame);
+                      + " maxSteps/frame=" + cfg.maxStepsPerFrame + " | " + RunGuard.Describe());
             if (Application.isBatchMode)
             {
                 Debug.LogWarning("[FrameBudget] Running in -batchmode: there is no Game view, so nothing is rendered. Draw calls and SetPass calls will read 0 and frame time excludes rendering. "
@@ -233,6 +247,10 @@ namespace FrameBudget
                    .Append(totalSteps).Append(',')
                    .Append(cappedFrames).Append(',')
                    .Append(F(dropped)).Append(',')
+                   .Append(RunGuard.VSyncCount).Append(',')
+                   .Append(RunGuard.TargetFrameRate).Append(',')
+                   .Append(RunGuard.RunInBackground ? 1 : 0).Append(',')
+                   .Append(F(RunGuard.RefreshRateHz)).Append(',')
                    .Append(F(frameMed)).Append(',').Append(F(frameP95)).Append(',')
                    .Append(mainStats).Append(',')
                    .Append(F(simMed)).Append(',').Append(F(simP95)).Append(',')

@@ -78,13 +78,16 @@ namespace FrameBudget
             }
 
             // Frame time must mean "what this frame cost", so nothing is allowed to pace the frame.
-            QualitySettings.vSyncCount = 0;
-            Application.targetFrameRate = -1;
-            Application.runInBackground = true;
+            // Interactive play only warns; a benchmark run aborts instead (see BenchmarkRunner.Start).
+            string clamp = RunGuard.ApplyAndVerify();
+            if (clamp != null)
+            {
+                Debug.LogWarning("[FrameBudget] A frame-rate clamp is in effect, so displayed frame times describe the display, not the code: " + clamp);
+            }
 
             Debug.Log("[FrameBudget] Unity " + Application.unityVersion + " | " + (Application.isEditor ? "Editor" : "Player")
-                      + " | batchmode=" + Application.isBatchMode + " | vSyncCount=" + QualitySettings.vSyncCount
-                      + " targetFrameRate=" + Application.targetFrameRate + " | " + Screen.width + "x" + Screen.height
+                      + " | batchmode=" + Application.isBatchMode + " | " + RunGuard.Describe()
+                      + " | " + Screen.width + "x" + Screen.height
                       + " | GPU: " + SystemInfo.graphicsDeviceName + " | CPU: " + SystemInfo.processorType);
             if (agentMaterial.enableInstancing)
             {
