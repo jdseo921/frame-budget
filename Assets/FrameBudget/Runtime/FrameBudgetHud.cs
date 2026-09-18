@@ -1,6 +1,14 @@
 // FEATURE-FROZEN. This HUD is the instrument the demo video films. Further layout work is out of
 // scope for the week; change it only if a measurement is unreadable on camera, and name that
 // measurement in the commit message.
+//
+// EXCEPTION TAKEN, under that clause: the technique panel (DrawTechniquePanel).
+// Which techniques are on was readable only by parsing the title line, so on camera a key press
+// changed no visible state - the reader saw a number move somewhere else and had to take on trust
+// what caused it. In a muted half-size GIF that is not a measurement at all. The panel states each
+// technique as colour first and text second, and names the run mode, because "0 step/frame" beside
+// a simulation figure reads as a contradiction in interactive play. Nothing else is unfrozen, and
+// the panel obeys the allocation rule the results depend on: see DrawTechniquePanel.
 using System;
 using UnityEngine;
 using UnityEngine.Rendering;
@@ -22,7 +30,8 @@ namespace FrameBudget
         private const int LabelWidth = 14;
         private const int ColumnChars = 10;
         private const string NotResolved = "n/a - counter did not resolve";
-        private const string Controls = "1/2/3 spatialHash · zeroAlloc · gpuInstancing\nUp/Dn +-100 · PgUp/PgDn +-1000 · R respawn\nB benchmark · H hide HUD";
+        // The technique panel carries the 1/2/3 legend, so this line does not repeat it.
+        private const string Controls = "Up/Dn +-100 · PgUp/PgDn +-1000 · R respawn\nB benchmark · H hide HUD";
 
         private static readonly Func<double, string> MsFormat = v => v.ToString("F2") + " ms";
         private static readonly Func<double, string> CountFormat = v => v.ToString("F0");
@@ -33,6 +42,28 @@ namespace FrameBudget
         private static readonly Color PanelBackground = new Color(0.10f, 0.10f, 0.12f, 1f);
         private static readonly Color Separator = new Color(0.35f, 0.35f, 0.40f, 1f);
 
+        // Technique panel. Sized and coloured for a 1280x720 capture watched at half size with no
+        // sound: the row tint and the state pill are two independent cues, so ON and OFF are
+        // distinguishable before any text is legible.
+        private const float TechniqueRowHeight = 34f;
+        private static readonly string[] TechniqueKeys = { "1", "2", "3" };
+        private static readonly string[] TechniqueNames = { "spatial hash", "zero allocation", "GPU instancing" };
+        private const string ModeInteractiveText = "INTERACTIVE · real time · 0-1 steps per frame";
+        private const string ModeBenchmarkText = "BENCHMARK RUN · exactly 1 step per frame";
+
+        private static readonly Color ModeInteractive = new Color(0.16f, 0.20f, 0.34f, 1f);
+        private static readonly Color ModeBenchmark = new Color(0.40f, 0.28f, 0.06f, 1f);
+        private static readonly Color ModeText = new Color(0.93f, 0.94f, 0.98f, 1f);
+        private static readonly Color RowOnBackground = new Color(0.10f, 0.23f, 0.14f, 1f);
+        private static readonly Color RowOffBackground = new Color(0.07f, 0.07f, 0.08f, 1f);
+        private static readonly Color PillOn = new Color(0.18f, 0.78f, 0.35f, 1f);
+        private static readonly Color PillOff = new Color(0.22f, 0.22f, 0.26f, 1f);
+        private static readonly Color TextOn = new Color(0.82f, 1f, 0.87f, 1f);
+        private static readonly Color TextOff = new Color(0.45f, 0.45f, 0.50f, 1f);
+        private static readonly Color StateTextOn = new Color(0.02f, 0.08f, 0.03f, 1f);
+        private static readonly Color StateTextOff = new Color(0.58f, 0.58f, 0.63f, 1f);
+        private static readonly Color EffectOn = new Color(0.55f, 0.90f, 0.70f, 1f);
+
         private string text = "";
 
         /// <summary>Reused by the zeroAlloc path so that building the panel does not allocate.</summary>
@@ -40,6 +71,11 @@ namespace FrameBudget
 
         private string agentCountField = "0";
         private readonly GUIContent content = new GUIContent();
+
+        /// <summary>Builds the technique panel's two effect figures without allocating; see UpdateEffectText.</summary>
+        private readonly System.Text.StringBuilder effectBuilder = new System.Text.StringBuilder(32);
+        private string drawCallsText = "";
+        private string collectionsText = "";
 
         private bool stylesReady;
         private GUIStyle textStyle;
@@ -96,7 +132,6 @@ namespace FrameBudget
                  + Row("GC bytes/fr", m.GcBytes, m.GcAllocatedValid, BytesFormat)
                  + Row("Draw calls", m.DrawCalls, m.DrawCallsValid, CountFormat)
                  + Row("SetPass", m.SetPassCalls, m.SetPassCallsValid, CountFormat)
-                 + "\n"
                  + (d.Benchmark.IsRunning || d.Benchmark.IsFinished ? d.Benchmark.Status : Controls);
         }
 
@@ -161,7 +196,6 @@ namespace FrameBudget
             AppendRow("Draw calls", m.DrawCalls, m.DrawCallsValid, Unit.Count);
             AppendRow("SetPass", m.SetPassCalls, m.SetPassCallsValid, Unit.Count);
 
-            builder.Append('\n');
             builder.Append(d.Benchmark.IsRunning || d.Benchmark.IsFinished ? d.Benchmark.Status : Controls);
 
             // Only materialise a string when the panel actually changed.
@@ -293,7 +327,124 @@ namespace FrameBudget
                 y += h + pad;
             }
 
-            DrawGraph(d.Metrics, new Rect(pad, y, panelWidth, Mathf.Round(170f * s)), s);
+            // The column has to hold the table, the buttons, the technique rows and the graph inside
+            // 720p, so the two gaps around the technique panel are tighter than the rest and the
+            // graph takes what is left. The graph keeps its own gutter and caption strip.
+            float gap = Mathf.Round(pad * 0.6f);
+            float techHeight = Mathf.Round(TechniqueRowHeight * 4f * s) + pad;
+            DrawTechniquePanel(d, new Rect(pad, y, panelWidth, techHeight), s);
+            y += techHeight + gap;
+
+            // Exactly what is left, so the caption strip stays on screen. A floor here would push the
+            // graph past the bottom edge instead of shortening it.
+            float graphHeight = Screen.height - y - pad;
+            DrawGraph(d.Metrics, new Rect(pad, y, panelWidth, graphHeight), s);
+        }
+
+        /// <summary>
+        /// Which techniques are on, as color first and text second, so a muted half-size GIF still
+        /// shows a row change when a key is pressed. Above the rows, whether this is free-running
+        /// interactive play or a benchmark run, because "steps this frame" means different things in
+        /// the two modes and reads as a contradiction without it.
+        ///
+        /// Nothing here allocates per frame: every label is a literal, and the two effect figures are
+        /// rebuilt into a reused builder and turned into a string only when the displayed value
+        /// changes - the same rule the zeroAlloc panel follows, for the same reason.
+        /// </summary>
+        private void DrawTechniquePanel(FrameBudgetDriver d, Rect r, float s)
+        {
+            float pad = Mathf.Round(10f * s);
+            float rowH = Mathf.Round(TechniqueRowHeight * s);
+            float keyW = Mathf.Round(30f * s);
+            float stateW = Mathf.Round(74f * s);
+            float effectW = Mathf.Round(132f * s);
+
+            TechniqueCombination t = d.ActiveTechniques;
+            bool benchmarking = d.Benchmark.IsRunning;
+            UpdateEffectText(d);
+
+            if (Event.current.type == EventType.Repaint)
+            {
+                graphMaterial.SetPass(0);
+                GL.PushMatrix();
+                GL.LoadPixelMatrix(0f, Screen.width, Screen.height, 0f);
+                GL.Begin(GL.QUADS);
+                Quad(r.xMin, r.yMin, r.xMax, r.yMax, PanelBackground);
+                // Mode strip: a benchmark run is the one that owns the flags, so it gets its own color.
+                Quad(r.xMin, r.yMin, r.xMax, r.yMin + rowH, benchmarking ? ModeBenchmark : ModeInteractive);
+                for (int i = 0; i < 3; i++)
+                {
+                    bool on = i == 0 ? t.spatialHash : i == 1 ? t.zeroAlloc : t.gpuInstancing;
+                    float top = r.yMin + rowH * (i + 1) + pad * 0.5f;
+                    float bottom = top + rowH - Mathf.Round(6f * s);
+                    // Whole-row tint plus a solid state pill: two independent color cues per row.
+                    Quad(r.xMin + pad * 0.5f, top, r.xMax - pad * 0.5f, bottom, on ? RowOnBackground : RowOffBackground);
+                    float pillX = r.xMax - pad - stateW;
+                    Quad(pillX, top, pillX + stateW, bottom, on ? PillOn : PillOff);
+                }
+                GL.End();
+                GL.PopMatrix();
+            }
+
+            int rowFont = Mathf.Max(13, Mathf.RoundToInt(21f * s));
+            textStyle.fontSize = rowFont;
+            textStyle.alignment = TextAnchor.MiddleLeft;
+            textStyle.normal.textColor = ModeText;
+            GUI.Label(new Rect(r.xMin + pad, r.yMin, r.width - 2f * pad, rowH),
+                      benchmarking ? ModeBenchmarkText : ModeInteractiveText, textStyle);
+
+            for (int i = 0; i < 3; i++)
+            {
+                bool on = i == 0 ? t.spatialHash : i == 1 ? t.zeroAlloc : t.gpuInstancing;
+                float top = r.yMin + rowH * (i + 1) + pad * 0.5f;
+                var row = new Rect(r.xMin + pad, top, r.width - 2f * pad, rowH - Mathf.Round(6f * s));
+
+                textStyle.normal.textColor = on ? TextOn : TextOff;
+                GUI.Label(new Rect(row.x, row.y, keyW, row.height), TechniqueKeys[i], textStyle);
+                GUI.Label(new Rect(row.x + keyW, row.y, row.width - keyW - stateW - effectW, row.height), TechniqueNames[i], textStyle);
+
+                // The number each technique moves, next to the technique, so cause and effect are read together.
+                string effect = i == 1 ? collectionsText : i == 2 ? drawCallsText : null;
+                if (effect != null)
+                {
+                    textStyle.alignment = TextAnchor.MiddleRight;
+                    textStyle.normal.textColor = on ? EffectOn : TextOff;
+                    GUI.Label(new Rect(row.xMax - stateW - effectW - pad, row.y, effectW, row.height), effect, textStyle);
+                    textStyle.alignment = TextAnchor.MiddleLeft;
+                }
+
+                textStyle.alignment = TextAnchor.MiddleCenter;
+                textStyle.normal.textColor = on ? StateTextOn : StateTextOff;
+                GUI.Label(new Rect(row.xMax - stateW, row.y, stateW, row.height), on ? "ON" : "OFF", textStyle);
+                textStyle.alignment = TextAnchor.MiddleLeft;
+            }
+
+            textStyle.alignment = TextAnchor.UpperLeft;
+            textStyle.normal.textColor = Color.white;
+        }
+
+        /// <summary>Refreshes the two effect strings, materialising one only when its displayed value changes.</summary>
+        private void UpdateEffectText(FrameBudgetDriver d)
+        {
+            FrameMetrics m = d.Metrics;
+
+            effectBuilder.Length = 0;
+            if (m.DrawCallsValid && m.DrawCalls.Count > 0)
+            {
+                ZeroAllocText.AppendFixed(effectBuilder, m.DrawCalls.Median, 0);
+                effectBuilder.Append(" draws");
+            }
+            else effectBuilder.Append("draws --");
+            if (!ZeroAllocText.ContentEquals(effectBuilder, drawCallsText)) drawCallsText = effectBuilder.ToString();
+
+            effectBuilder.Length = 0;
+            if (m.GcAllocatedValid && m.CollectionsPerFrame.Count > 0)
+            {
+                ZeroAllocText.AppendFixed(effectBuilder, m.CollectionsPerFrame.Median, 2);
+                effectBuilder.Append(" GC/fr");
+            }
+            else effectBuilder.Append("GC/fr --");
+            if (!ZeroAllocText.ContentEquals(effectBuilder, collectionsText)) collectionsText = effectBuilder.ToString();
         }
 
         private void DrawGraph(FrameMetrics m, Rect r, float s)
