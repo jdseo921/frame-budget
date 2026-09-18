@@ -49,7 +49,9 @@ namespace FrameBudget
         private static readonly string[] TechniqueKeys = { "1", "2", "3" };
         private static readonly string[] TechniqueNames = { "spatial hash", "zero allocation", "GPU instancing" };
         private const string ModeInteractiveText = "INTERACTIVE · real time · 0-1 steps per frame";
-        private const string ModeBenchmarkText = "BENCHMARK RUN · exactly 1 step per frame";
+        // Names the rule rather than the activity, because a presentation capture steps this way too
+        // without a sweep running. While a sweep is running the text panel above shows its status.
+        private const string ModeBenchmarkText = "BENCHMARK STEPPING · exactly 1 step per frame";
 
         private static readonly Color ModeInteractive = new Color(0.16f, 0.20f, 0.34f, 1f);
         private static readonly Color ModeBenchmark = new Color(0.40f, 0.28f, 0.06f, 1f);
@@ -308,7 +310,11 @@ namespace FrameBudget
             GUI.Label(new Rect(panel.x + pad, panel.y + pad, panel.width - 2f * pad, textHeight), text, textStyle);
 
             float y = panel.yMax + pad;
-            if (!d.Benchmark.IsRunning)
+            // Hidden whenever the benchmark stepping rule is in force, a presentation capture
+            // included, so the panel a capture records is the panel a measured frame draws. The
+            // buttons are a handful of draw calls and would put the screenshot's counter above the
+            // table's for the same configuration.
+            if (!d.BenchmarkStepping)
             {
                 float h = Mathf.Round(40f * s);
                 float w = Mathf.Round((panelWidth - 3f * pad) / 4f);
@@ -360,7 +366,9 @@ namespace FrameBudget
             float effectW = Mathf.Round(132f * s);
 
             TechniqueCombination t = d.ActiveTechniques;
-            bool benchmarking = d.Benchmark.IsRunning;
+            // The strip names the stepping rule in force, not whether a sweep is running, because that
+            // is what the line beside it means. A presentation capture uses the benchmark rule too.
+            bool benchmarking = d.BenchmarkStepping;
             UpdateEffectText(d);
 
             if (Event.current.type == EventType.Repaint)

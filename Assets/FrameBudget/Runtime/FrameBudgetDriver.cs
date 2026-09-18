@@ -73,7 +73,24 @@ namespace FrameBudget
         public const string InteractiveSteppingMode = "realtime-accumulator-capped";
 
         /// <summary>Which stepping rule is in force; recorded in every CSV row so rows taken under different rules are never compared.</summary>
-        public string SteppingMode => benchmark != null && benchmark.IsRunning ? BenchmarkSteppingMode : InteractiveSteppingMode;
+        /// <summary>
+        /// True while the fixed one-step-per-frame rule is in force: during a benchmark run, and
+        /// during a presentation capture, which needs the same rule for the panel to show the figures
+        /// the README quotes. False in ordinary interactive play.
+        /// </summary>
+        public bool BenchmarkStepping => benchmark != null && (benchmark.IsRunning || capturing);
+
+        public string SteppingMode => BenchmarkStepping ? BenchmarkSteppingMode : InteractiveSteppingMode;
+
+        /// <summary>Set once by <see cref="PresentationCaptureBehaviour"/>; false in every normal run.</summary>
+        private bool capturing;
+
+        /// <summary>Switches to benchmark stepping for a screenshot, without starting a benchmark or writing a CSV.</summary>
+        public void BeginPresentationCapture()
+        {
+            capturing = true;
+            accumulator = 0.0;
+        }
 
         /// <summary>Technique flags currently in force. The benchmark sets these per point; interactive play uses the config's own flags.</summary>
         public TechniqueCombination ActiveTechniques => activeTechniques;
@@ -174,6 +191,15 @@ namespace FrameBudget
                 return;
             }
 
+            // Presentation capture. One test at start-up and nothing else: without the flag the
+            // behaviour is never constructed, so a normal run carries no part of this path.
+            if (PresentationCapture.Requested)
+            {
+                BenchmarkLaunch.MarkUnattended();
+                gameObject.AddComponent<PresentationCaptureBehaviour>().Bind(this);
+                return;
+            }
+
             if (BenchmarkLaunch.TryGetRequest(out string configName))
             {
                 SimConfig cfg = ResolveConfig(configName);
@@ -204,7 +230,7 @@ namespace FrameBudget
             double simMs = 0.0;
             bool capHit = false;
 
-            if (benchmark.IsRunning)
+            if (BenchmarkStepping)
             {
                 // BENCHMARK STEPPING: exactly one step per frame, unconditionally, with no reference
                 // to wall-clock time. A benchmark wants a fixed amount of work per frame; keeping up
