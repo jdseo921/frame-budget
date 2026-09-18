@@ -191,8 +191,15 @@ namespace FrameBudget
                 return;
             }
 
-            // Presentation capture. One test at start-up and nothing else: without the flag the
-            // behaviour is never constructed, so a normal run carries no part of this path.
+            // Presentation capture. One test at start-up and nothing else: without the flag neither
+            // behaviour is constructed, so a normal run carries no part of this path.
+            if (PresentationCapture.ClipRequested)
+            {
+                BenchmarkLaunch.MarkUnattended();
+                gameObject.AddComponent<ClipCaptureBehaviour>().Bind(this);
+                return;
+            }
+
             if (PresentationCapture.Requested)
             {
                 BenchmarkLaunch.MarkUnattended();

@@ -40,6 +40,21 @@ namespace FrameBudget
     public sealed class FrameMetrics : IDisposable
     {
         public const int WindowSize = 120;
+
+        /// <summary>Counts down in <see cref="BeginFrame"/>; zero in every run that is not capturing.</summary>
+        private int samplesToDiscard;
+
+        /// <summary>
+        /// Keeps the next <paramref name="count"/> frames out of the rolling windows the HUD reports,
+        /// so the figures on a captured image describe real frames rather than the frames that paid
+        /// for the capture. Two is the useful default: the readback stalls the frame it runs in, and
+        /// the encode and file write land inside the same interval, but the disturbance measurably
+        /// outlives that one frame.
+        /// </summary>
+        public void DiscardNextSamples(int count = 2)
+        {
+            if (count > samplesToDiscard) samplesToDiscard = count;
+        }
         public const double BudgetMs = 1000.0 / 60.0;
 
         public const string DrawCallsCounter = "Draw Calls Count";
@@ -233,7 +248,17 @@ namespace FrameBudget
             }
             lastFrameStartTicks = now;
 
-            if (s.HasFrameTime)
+            // A frame that paid for a screen readback is not a representative frame. ReadPixels
+            // stalls the pipeline, and the interval measured here carries that cost, so letting it
+            // into the rolling windows would print an inflated frame time, step time and p95 onto
+            // the very image being captured - a clip reporting numbers the app does not produce.
+            // The sample is still returned to the caller and the timing and allocation baselines
+            // still advance; only the windows the HUD reads skip it. PresentationCapture sets this
+            // immediately after each readback, and nothing else does.
+            bool discardThisSample = samplesToDiscard > 0;
+            if (discardThisSample) samplesToDiscard--;
+
+            if (s.HasFrameTime && !discardThisSample)
             {
                 FrameMs.Add(s.FrameMs);
                 SimMs.Add(s.SimMs);
