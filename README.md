@@ -8,8 +8,8 @@ It is a small Unity scene full of agents that steer toward a goal while pushing 
 
 <!-- Media. Uncomment each line once the file exists in docs/media/ — a commented-out image
      never renders as a broken one, and this README is the first thing a stranger sees.
-![Ten thousand agents at 5.95 ms, with the instrument panel showing frame time, step time, draw calls and collections](docs/media/hero.png)
-![Toggling the spatial hash at runtime: frame time falls from 670 ms to 17 ms](docs/media/toggle.gif)
+![Ten thousand agents at 5.95 ms, with the instrument panel showing frame time, step time, draw calls and collections](docs/media/10000-agents.png)
+![Toggling GPU instancing at 10,000 agents: draw calls collapse from ~9,955 to ~63](docs/media/instancing-toggle.gif)
 -->
 
 <!-- HEADLINE_TABLE:BEGIN -->

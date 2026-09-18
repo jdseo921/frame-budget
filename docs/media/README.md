@@ -10,7 +10,7 @@ first line and a reader will check.
 Builds/Windows64/FrameBudget.exe -screen-fullscreen 0 -screen-width 1280 -screen-height 720
 ```
 
-## `hero.png` — 1280 × 720
+## `10000-agents.png` — 1280 × 720
 
 One still, at **10,000 agents with all three techniques on**, showing the instrument panel beside
 the agent field. The panel must legibly show frame time, sim step, GC collections per frame and
@@ -19,12 +19,23 @@ draw calls, because those are the four numbers the headline table quotes.
 Set it up with: `+1000` until the field reads 10000, then the technique toggles, then let the
 rolling window fill for a few seconds so the medians settle before capturing.
 
-## `toggle.gif` — 1280 × 720, under 10 seconds, under about 8 MB
+## `instancing-toggle.gif` — 1280 × 720, under 10 seconds, under about 8 MB
 
-One continuous take at 10,000 agents showing a technique being switched on and the frame-time graph
-dropping — the graph redrawing below the 16.7 ms line is the whole story in one shot. The spatial
-hash is the most dramatic single toggle (670 ms to about 17 ms); the instancing toggle is the one
-where the draw-call counter falls from ~9,900 to 21, which is the more surprising number.
+One continuous take at **10,000 agents with `spatialHash` and `zeroAlloc` already on**, pressing
+**3** to toggle `gpuInstancing`. Let the rolling window settle either side of the press, so both
+states are readable rather than mid-transition.
+
+Start from two techniques rather than none. With all three off, 10,000 agents costs about 671 ms a
+frame — roughly 1.5 frames per second — and a clip of that does not read as *slow*, it reads as
+*broken*: the graph barely updates, the agents jump rather than move, and a viewer assumes the
+capture failed. Starting from a configuration that already runs smoothly keeps the before state
+believable, and leaves one variable changing on screen.
+
+**The draw-call collapse is the point**, from about 9,955 to about 63 while the frame time moves
+comparatively little. That asymmetry is the interesting part: it is the clearest single frame of
+evidence that this workload is CPU-bound in the simulation rather than in rendering. The technique
+panel makes the cause visible — row 3 flips from a dim grey `OFF` to a bright green `ON` — so the
+number and the reason for it are on screen together.
 
 Keep it short. A loop that takes ten seconds to make its point will not be watched.
 
