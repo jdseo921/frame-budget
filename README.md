@@ -4,11 +4,11 @@ A game running at 60 frames per second has **16.7 milliseconds** to do everythin
 
 It is a small Unity scene full of agents that steer toward a goal while pushing away from their neighbors — the crowd behavior behind a strategy game's units or a city's pedestrians. It starts from a deliberately slow version, then applies three well-known optimizations one at a time, measuring each one against the slow version it replaces. The point is not that the optimizations work; everyone knows they work. The point is *by how much*, under conditions careful enough that the numbers can be trusted.
 
-**Ten thousand steering agents, simulated and drawn, in 6.15 ms a frame — and the 16.7 ms budget holds to 18,000 agents.** The naive baseline needs 670.95 ms for the same ten thousand. Each optimization is verified to leave the simulation *bit-identical* to the baseline, so what changed is the cost and not the result.
+**Ten thousand steering agents, simulated and drawn, in 5.95 ms a frame — and the 16.7 ms budget holds to 18,000 agents.** The naive baseline needs 670.95 ms for the same ten thousand. Each optimization is verified to leave the simulation *bit-identical* to the baseline, so what changed is the cost and not the result.
 
 <!-- Media. Uncomment each line once the file exists in docs/media/ — a commented-out image
      never renders as a broken one, and this README is the first thing a stranger sees.
-![Ten thousand agents at 6.15 ms, with the instrument panel showing frame time, step time, draw calls and collections](docs/media/hero.png)
+![Ten thousand agents at 5.95 ms, with the instrument panel showing frame time, step time, draw calls and collections](docs/media/hero.png)
 ![Toggling the spatial hash at runtime: frame time falls from 670 ms to 17 ms](docs/media/toggle.gif)
 -->
 
@@ -16,9 +16,9 @@ It is a small Unity scene full of agents that steer toward a goal while pushing 
 
 | At 10,000 agents | `baseline` | `spatialHash+zeroAlloc+gpuInstancing` |
 |---|---:|---:|
-| Frame time (median) | 670.95 ms | **6.15 ms** |
-| Simulation step (median) | 664.30 ms | 4.69 ms |
-| Draw calls | 9,818 | 21 |
+| Frame time (median) | 670.95 ms | **5.95 ms** |
+| Simulation step (median) | 664.30 ms | 4.34 ms |
+| Draw calls | 9,818 | 63 |
 | GC collections / frame | 10.95 | 0.06 |
 
 <!-- HEADLINE_TABLE:END -->
@@ -71,26 +71,26 @@ The measurement protocol is `docs/METHOD.md`; the raw CSVs are in `results/`.
 | 2,000 | spatialHash | 5 | 2.89 | 2.79 – 2.90 | 3.30 | 0.88 | 0.79 | 324.0 KB | 2,007 | 28 |
 | 5,000 | spatialHash | 5 | 6.71 | 6.55 – 6.83 | 8.47 | 3.24 | 2.29 |  | 4,988 | 58 |
 | 10,000 | spatialHash | 5 | 16.68 | 16.02 – 16.84 | 20.98 | 10.94 | 5.71 |  | 9,940 | 108 |
-| 1,000 | spatialHash+zeroAlloc | 10 | 1.70 | 1.60 – 2.06 | 2.40 | 0.13 | 0.06 | 52.0 KB | 1,011 | 18 |
-| 2,000 | spatialHash+zeroAlloc | 10 | 2.29 | 2.22 – 2.46 | 2.92 | 0.36 | 0.06 | 52.0 KB | 2,003 | 28 |
-| 5,000 | spatialHash+zeroAlloc | 10 | 4.86 | 4.49 – 5.26 | 7.11 | 1.45 | 0.06 | 64.0 KB | 4,985 | 58 |
-| 10,000 | spatialHash+zeroAlloc | 10 | 10.24 | 9.59 – 14.45 | 14.31 | 4.71 | 0.06 | 64.0 KB | 9,942 | 108 |
-| 1,000 | spatialHash+zeroAlloc+gpuInstancing | 5 | 1.36 | 1.24 – 1.53 | 2.33 | 0.14 | 0.06 | 56.0 KB | 21 | 9 |
-| 2,000 | spatialHash+zeroAlloc+gpuInstancing | 5 | 1.68 | 1.34 – 1.80 | 2.67 | 0.37 | 0.07 | 60.0 KB | 21 | 9 |
-| 5,000 | spatialHash+zeroAlloc+gpuInstancing | 5 | 2.80 | 2.73 – 2.93 | 4.60 | 1.46 | 0.07 | 64.0 KB | 21 | 9 |
-| 10,000 | spatialHash+zeroAlloc+gpuInstancing | 5 | 6.15 | 6.12 – 6.22 | 8.78 | 4.69 | 0.06 | 68.0 KB | 21 | 9 |
-| 12,000 | spatialHash+zeroAlloc+gpuInstancing | 5 | 7.18 | 7.08 – 7.52 | 10.13 | 5.88 | 0.08 | 68.0 KB | 21 | 9 |
-| 14,000 | spatialHash+zeroAlloc+gpuInstancing | 5 | 9.36 | 9.16 – 9.48 | 12.37 | 7.86 | 0.08 | 68.0 KB | 21 | 9 |
-| 16,000 | spatialHash+zeroAlloc+gpuInstancing | 5 | 11.60 | 11.37 – 11.86 | 14.73 | 10.16 | 0.07 | 68.0 KB | 21 | 9 |
-| 18,000 | spatialHash+zeroAlloc+gpuInstancing | 5 | 14.21 | 13.99 – 14.38 | 17.68 | 12.65 | 0.07 | 68.0 KB | 21 | 9 |
-| 20,000 | spatialHash+zeroAlloc+gpuInstancing | 5 | 16.95 | 16.91 – 17.31 | 20.75 | 15.32 | 0.07 | 68.0 KB | 21 | 9 |
-| 24,000 | spatialHash+zeroAlloc+gpuInstancing | 5 | 23.46 | 23.12 – 23.77 | 27.30 | 21.62 | 0.07 | 72.0 KB | 21 | 9 |
+| 1,000 | spatialHash+zeroAlloc | 10 | 1.65 | 1.58 – 1.83 | 2.38 | 0.13 | 0.06 | 52.0 KB | 1,016 | 18 |
+| 2,000 | spatialHash+zeroAlloc | 10 | 2.26 | 2.17 – 2.60 | 2.97 | 0.35 | 0.06 | 56.0 KB | 2,008 | 28 |
+| 5,000 | spatialHash+zeroAlloc | 10 | 4.58 | 4.30 – 4.91 | 6.42 | 1.42 | 0.06 | 64.0 KB | 4,988 | 58 |
+| 10,000 | spatialHash+zeroAlloc | 10 | 9.72 | 8.94 – 10.84 | 12.91 | 4.56 | 0.06 | 64.0 KB | 9,944 | 108 |
+| 1,000 | spatialHash+zeroAlloc+gpuInstancing | 5 | 1.21 | 1.12 – 1.52 | 2.34 | 0.13 | 0.06 | 56.0 KB | 36 | 22 |
+| 2,000 | spatialHash+zeroAlloc+gpuInstancing | 5 | 1.41 | 1.34 – 1.84 | 2.70 | 0.34 | 0.07 | 56.0 KB | 39 | 22 |
+| 5,000 | spatialHash+zeroAlloc+gpuInstancing | 5 | 2.57 | 2.53 – 2.71 | 4.59 | 1.33 | 0.07 | 68.0 KB | 48 | 22 |
+| 10,000 | spatialHash+zeroAlloc+gpuInstancing | 5 | 5.95 | 5.66 – 6.03 | 8.24 | 4.34 | 0.06 | 72.0 KB | 63 | 22 |
+| 12,000 | spatialHash+zeroAlloc+gpuInstancing | 5 | 7.42 | 7.34 – 7.49 | 10.35 | 5.80 | 0.09 | 68.0 KB | 69 | 22 |
+| 14,000 | spatialHash+zeroAlloc+gpuInstancing | 5 | 9.56 | 9.46 – 9.69 | 12.69 | 7.84 | 0.08 | 72.0 KB | 75 | 22 |
+| 16,000 | spatialHash+zeroAlloc+gpuInstancing | 5 | 11.94 | 11.74 – 11.96 | 15.44 | 10.04 | 0.08 | 72.0 KB | 81 | 22 |
+| 18,000 | spatialHash+zeroAlloc+gpuInstancing | 5 | 14.61 | 14.40 – 14.82 | 18.64 | 12.69 | 0.07 | 72.0 KB | 87 | 22 |
+| 20,000 | spatialHash+zeroAlloc+gpuInstancing | 5 | 17.48 | 17.30 – 17.70 | 21.81 | 15.42 | 0.07 | 72.0 KB | 93 | 22 |
+| 24,000 | spatialHash+zeroAlloc+gpuInstancing | 5 | 23.88 | 23.61 – 23.94 | 28.53 | 21.72 | 0.08 | 72.0 KB | 104 | 22 |
 | 1,000 | zeroAlloc | 5 | 2.13 | 2.10 – 2.15 | 2.73 | 0.65 | 0.08 | 48.0 KB | 1,012 | 18 |
 | 2,000 | zeroAlloc | 5 | 4.48 | 4.26 – 4.69 | 8.20 | 2.46 | 0.08 | 48.0 KB | 2,005 | 28 |
 | 5,000 | zeroAlloc | 5 | 19.69 | 19.44 – 21.42 | 21.71 | 16.07 | 0.08 | 60.0 KB | 4,946 | 58 |
 | 10,000 | zeroAlloc | 5 | 71.44 | 70.56 – 72.27 | 493.49 | 64.74 | 0.08 | 64.0 KB | 9,820 | 108 |
 
-*Generated by `tools/update_readme_table.py` from `results/benchmark_TechniqueMatrix_20260917_095811.csv, results/benchmark_InstancingSweep_20260917_103138.csv, results/benchmark_BudgetCrossing_20260917_103556.csv` — do not edit by hand.*
+*Generated by `tools/update_readme_table.py` from `results/benchmark_TechniqueMatrix_20260917_095811.csv, results/benchmark_InstancingSweep_20260918_104221.csv, results/benchmark_BudgetCrossing_20260918_104330.csv` — do not edit by hand.*
 
 <!-- RESULTS_TABLE:END -->
 
@@ -110,8 +110,8 @@ Three things in that table deserve a note.
 
 **`spatialHash+zeroAlloc+gpuInstancing`** — the configuration this project ships
 
-- **16.7 ms (60 fps)** — crossed between **18,000 agents** (14.21 ms) and **20,000 agents** (16.95 ms). The sweep does not sample between those two counts, so the exact crossing point is bracketed, not measured.
-- **33.3 ms (30 fps)** — not crossed at any measured agent count. The largest measured point, 24,000 agents, has a median frame time of 23.46 ms.
+- **16.7 ms (60 fps)** — crossed between **18,000 agents** (14.61 ms) and **20,000 agents** (17.48 ms). The sweep does not sample between those two counts, so the exact crossing point is bracketed, not measured.
+- **33.3 ms (30 fps)** — not crossed at any measured agent count. The largest measured point, 24,000 agents, has a median frame time of 23.88 ms.
 
 **`baseline`** — the naive control, for contrast
 
@@ -128,8 +128,8 @@ Three things in that table deserve a note.
 
 **`spatialHash+zeroAlloc`**
 
-- **16.7 ms (60 fps)** — not crossed at any measured agent count. The largest measured point, 10,000 agents, has a median frame time of 10.24 ms.
-- **33.3 ms (30 fps)** — not crossed at any measured agent count. The largest measured point, 10,000 agents, has a median frame time of 10.24 ms.
+- **16.7 ms (60 fps)** — not crossed at any measured agent count. The largest measured point, 10,000 agents, has a median frame time of 9.72 ms.
+- **33.3 ms (30 fps)** — not crossed at any measured agent count. The largest measured point, 10,000 agents, has a median frame time of 9.72 ms.
 
 **`zeroAlloc`**
 
@@ -148,7 +148,7 @@ Two techniques originally sketched for this project are not implemented, and the
 
 **Burst parallelisation** is the obvious next step and the groundwork is already there: the packages have been in the manifest since day 1, agent state is already parallel arrays of structs, and the step is already two-phase and order-independent — the shape `IJobParallelFor` wants. The honest reason it is absent is time. It would also be the first technique where bit-identical output is not free, since parallel float reduction depends on partition order.
 
-The measurements say where the remaining cost is. At 18,000 agents the frame is 14.21 ms, of which the simulation step is 12.65 ms and presentation is 0.15 ms. Rendering is no longer worth attacking. The step is — and it is single-threaded on a sixteen-thread machine.
+The measurements say where the remaining cost is. At 18,000 agents the frame is 14.61 ms, of which the simulation step is 12.69 ms and presentation is 0.19 ms. Rendering is no longer worth attacking. The step is — and it is single-threaded on a sixteen-thread machine.
 
 ## Not in scope
 
