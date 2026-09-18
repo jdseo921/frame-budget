@@ -1,0 +1,30 @@
+All rights reserved.
+
+Copyright (c) 2026 jdseo921
+
+This repository contains personal portfolio code, published so that it can be read and assessed as
+part of employment review. It is not offered for reuse.
+
+No permission is granted to copy, modify, merge, publish, distribute, sublicense or sell this work
+or any part of it, and no licence to any patent or trademark is granted. Viewing the repository and
+reading its contents is expressly permitted; anything beyond that requires written permission from
+the author.
+
+SCOPE
+
+The reservation above covers the original work in this project: the C# under Assets/, the Python
+under tools/, the PowerShell under tools/, the scene, the SimConfig assets and the material, the
+documentation under docs/, and the measurements committed in results/.
+
+It does not extend to third-party material, which remains subject to its owners' terms:
+
+  - The Unity Engine, the Unity Editor and the Unity packages this project depends on, which are
+    licensed by Unity Technologies and the respective package authors and are not distributed here.
+  - Unity's built-in cube mesh and Standard shader, which the scene references at run time and
+    which remain Unity's.
+
+THE WORK IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT
+LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
+IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN
+ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE WORK OR THE
+USE OR OTHER DEALINGS IN THE WORK.
