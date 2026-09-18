@@ -21,6 +21,9 @@ namespace FrameBudget
         /// <summary>Runs the instrument self-test instead of the benchmark, then exits.</summary>
         public const string SelfTestArg = "-frameBudgetSelfTest";
 
+        /// <summary>Resources path of the instancing-enabled agent material. See Awake for why it is an asset.</summary>
+        public const string InstancedMaterialResource = "AgentInstanced";
+
         [SerializeField] private SimConfig config;
 
         [Tooltip("Configs selectable by name from the command line with -frameBudgetConfig <asset name>.")]
@@ -129,11 +132,22 @@ namespace FrameBudget
             activeTechniques = config.CurrentTechniques;
             presenter = new NaiveAgentPresenter(agentMaterial);
 
-            // A runtime copy of the same material with the instancing variant enabled, so the
-            // two presenters draw the same mesh with the same shader and the same color and
-            // differ only in how the draws are submitted. Made here rather than as a second
-            // asset so that the scene needs no extra reference.
-            instancedMaterial = new Material(agentMaterial) { name = agentMaterial.name + " (instanced)", enableInstancing = true };
+            // The instanced material is an ASSET under Resources/, not a runtime copy of the naive
+            // one. A player build only compiles the shader variants its built-in materials ask for,
+            // and a material constructed at run time asks too late: the INSTANCING_ON variant is
+            // already stripped, so RenderMeshInstanced submits draws that rasterize nothing. The
+            // failure is silent - the draw-call counter still moves - and invisible in the editor,
+            // which keeps every variant. Resources/ is always included in a build, so the variant
+            // is compiled in. The asset is otherwise identical to AgentNaive: same shader, same
+            // color, differing only in the instancing flag.
+            instancedMaterial = Resources.Load<Material>(InstancedMaterialResource);
+            if (instancedMaterial == null)
+            {
+                Fatal("Assets/FrameBudget/Resources/" + InstancedMaterialResource + ".mat is missing. gpuInstancing "
+                      + "needs a built-in material with instancing enabled; without one the agents are submitted "
+                      + "but never rasterized, and any measurement of the technique would be void.");
+                return;
+            }
             instancedPresenter = new InstancedAgentPresenter(instancedMaterial);
             metrics = new FrameMetrics();
             hud = new FrameBudgetHud();
