@@ -288,10 +288,21 @@ SetPass must collapse too. It does — 9,472 batches to 21, and 108 SetPass call
 tellingly, it stops growing with agent count. Draw calls are 21 at every agent count from 1,000 to
 24,000. A constant is a different kind of number from a small one.
 
+> **Superseded, 18 September — see "Day 6: the instanced agents were never rasterized" below.** These
+> counts come from a build whose `INSTANCING_ON` shader variant was stripped, so the agents were
+> submitted and never drawn. The constant 21 was the tell, and I read it as the result. Draw calls do
+> not stay constant: they rise with agent count, 36 at 1,000 agents to 104 at 24,000. What the
+> paragraph concludes still holds — instancing collapses draw calls by two orders of magnitude,
+> 9,950 to 63 at 10,000 agents, and SetPass stops tracking object count — but these numbers are wrong.
+
 **The presentation cost that instancing removed was mostly not the position writes.** Present time
 fell from 0.509 ms to 0.100 ms at 10,000 agents, so only about 0.4 ms of the 2.5 ms the technique
 saved was in the loop it replaced. The rest was what the engine did afterwards with ten thousand
 renderers: culling them, sorting them, and submitting them one at a time.
+
+> **Re-measured, 18 September.** This one survives almost unchanged: 0.505 ms to 0.105 ms at 10,000
+> agents on the fixed build, against 0.509 and 0.100 here. Present time is CPU-side work on the
+> submitting thread, which a missing shader variant does not touch.
 
 **Two sweeps of the same configuration disagreed by eighteen per cent, and the reason was heat.**
 spatialHash+zeroAlloc at 10,000 agents measures 9.84 ms in the technique matrix and 11.61 ms in the
@@ -390,3 +401,118 @@ Everything reported is CPU-side. Given that draw calls scale one-per-agent and S
 behaving unexpectedly, knowing whether the GPU is anywhere near saturated would be worth having
 before the instancing day — otherwise a CPU-side improvement could be claimed while the real
 ceiling is elsewhere.
+
+
+### Day 6: the instanced agents were never rasterized in a player build
+
+The symptom was a screenshot. At 10,000 agents with all three techniques on, the world view was
+black — not one agent — while the panel beside it reported 29 draw calls. Draws were going out and
+nothing was coming back.
+
+The A/B that isolated it took one build. In the **editor**, gpuInstancing on draws the agents
+correctly: 26 draw calls against 1,017 for the naive path, cyan dots filling the viewport. In a
+1280x720 **IL2CPP player**, the same scene, the same flags and the same material draw nothing at
+all, and the counter still reports 29. Same code, opposite result, and the only difference is the
+build.
+
+That difference is the cause. A player build compiles only the shader variants its built-in
+materials ask for, and everything else is stripped. The instanced material was being made at run
+time —
+
+    instancedMaterial = new Material(agentMaterial) { enableInstancing = true };
+
+— which asks for `INSTANCING_ON` long after the build has decided what to compile. No material in
+the build carried the flag, so the variant was never compiled, and `Graphics.RenderMeshInstanced`
+submitted draws the player had no variant to execute. **The editor cannot show this**, because it
+compiles variants on demand and strips nothing; the run-time flag is satisfied the moment it is set.
+Every mechanism that would normally catch a rendering fault is absent here: the material is not
+null, the mesh is not null, the bounds are correct, and nothing logs a warning. The fix is an asset,
+`Assets/FrameBudget/Resources/AgentInstanced.mat`, carrying the flag at build time, since `Resources/`
+is always included.
+
+**Every counter this project records said the technique was working.** Draw calls moved, batches
+moved, SetPass moved, frame time moved. A measurement harness built specifically to catch optimistic
+claims reported a clean win for a configuration that was drawing nothing, for two days, and the only
+thing that exposed it was looking at the screen.
+
+#### What it did to the numbers
+
+The honest summary: the published instancing figures were taken on a build that was not instancing,
+and the CPU numbers barely moved when it was fixed.
+
+| agents | frame ms before | after | gpu ms before | after | draws before | after |
+|-------:|----------------:|------:|--------------:|------:|-------------:|------:|
+|  1,000 | 1.36 | 1.21 | 0.48 | 0.28 | 21 | 36 |
+| 10,000 | 6.15 | **5.95** | 0.99 | 0.85 | 21 | 63 |
+| 18,000 | 14.21 | **14.61** | 0.27 | 1.62 | 21 | 87 |
+| 24,000 | 23.46 | 23.88 | 0.31 | 2.06 | 21 | 104 |
+
+The headline figure got *faster*, 6.15 ms to 5.95 ms, and the crossing points got slightly slower.
+Both differences are inside the thermal band this project already documents between sweeps run at
+different times, and neither is a consequence of drawing: day 3 established that this workload is
+CPU-bound in the simulation by an enormous margin, so not drawing was never saving the CPU anything
+worth measuring. The budget crossing is unchanged where it counts — 18,000 agents at 0/5 runs over
+budget, 20,000 at 5/5 — so the headline survived re-measurement rather than being rescued by it.
+
+The draw-call figure is the one that was properly wrong. "21 at every agent count from 1,000 to
+24,000" was in the day-4 notes as the strongest single piece of evidence for the technique, and a
+constant *is* a different kind of number from a small one — it was just a constant produced by
+drawing nothing but the HUD. The real figure rises with agent count, 36 to 104, because Unity
+re-batches instanced draws well below the 1023-instance API limit. Against 9,950 for the naive path
+at 10,000 agents, 63 is still two orders of magnitude, so the claim was right and the number was not.
+
+#### The tell was already in results/
+
+Before the fix, GPU time for the instanced configuration was **flat at 0.27–0.31 ms from 12,000 to
+24,000 agents, and lower than the 0.48 ms recorded at 1,000**. Doubling the instance count changed
+nothing, because the only GPU work in those frames was the HUD. A counter that does not respond to
+the quantity it measures is the signature, and it was sitting in a committed CSV for two days while I
+read the frame-time column beside it.
+
+After the fix it rises monotonically with agent count — 0.28, 0.31, 0.42, 0.85, 1.18, 1.47, 1.78,
+2.06 ms from 1,000 to 24,000 — and stays between 9% and 23% of frame time throughout.
+
+#### Does this change the day-3 conclusion about GPU clocks?
+
+No, and it is worth being precise about why, because "the GPU column is believable now" invites the
+wrong inference.
+
+Day 3 flagged the baseline's 20.5 ms of GPU time as not credible for rendering work that the spatial
+hash does in 4.0 ms, and concluded the counter reports an interval spanning the whole frame rather
+than GPU busy time — the GPU idling, and clocking down, through the 95% of a 670 ms frame where the
+CPU is still stepping the simulation. METHOD §9 turned that into a rule: never quote a GPU delta
+between configurations whose CPU frame times differ by an order of magnitude.
+
+That evidence is **untouched by this bug**. It comes from `baseline`, `spatialHash`, `zeroAlloc` and
+`spatialHash+zeroAlloc` — none of which use instancing, none of which were ever stripped. At 10,000
+agents they still read 20.32, 4.04, 4.04 and 4.00 ms of GPU time for identical rendering work. The
+anomaly is exactly where it was and the rule still applies.
+
+What the fix does is **remove a piece of corroboration that turned out to have a different cause**.
+A flat, implausibly low GPU column in the instancing rows looked like more of the same
+counter-is-unreliable story, and it was not: it was the counter faithfully reporting that nothing was
+being drawn. Two unrelated faults were being read as one. The corrected instancing rows do not
+re-test the clock theory either, because they never enter the regime that produces it — the longest
+instanced frame measured is 23.88 ms, where the GPU is idle 91% of the time but the frame is two
+orders of magnitude shorter than the baseline's. So: one fewer piece of evidence, the same
+conclusion, and a GPU column that is now usable for the configuration that ships.
+
+#### One caveat in today's table
+
+`spatialHash+zeroAlloc` at each matrix agent count now shows **10 runs**, because the non-superseded
+17 September technique matrix and the 18 September instancing sweep both measure that configuration
+and the generator merges them. Those two sweeps ran on different builds — the second includes the
+technique panel, which draws every frame in every configuration — and the generator's comparability
+guard does not check the build, only CPU, GPU, backend, pipeline, stepping mode and window length.
+The merge is visible as a wider spread on that row and nowhere else. The right fix is to re-run the
+matrix on the current build so the whole table describes one program; it is not done yet.
+
+#### What I would do differently
+
+Every other claim in this repository is guarded. Determinism has `state_hash`, frame-rate clamps have
+`RunGuard`, mixing incomparable rows has the generator's column check, and the allocation claim has a
+self-test that runs in the player. The one claim with no guard at all was "the agents are on screen",
+because that felt like something you would obviously notice — and it is not, when the instrument is
+on the left and the world is on the right and you are reading the instrument. A check that sampled
+the world viewport and asserted some minimum number of non-background pixels would have failed on the
+first instancing run, in the player, where the editor could never have told me.
