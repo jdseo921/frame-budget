@@ -6,11 +6,10 @@ It is a small Unity scene full of agents that steer toward a goal while pushing 
 
 **Ten thousand steering agents, simulated and drawn, in 5.95 ms a frame — and the 16.7 ms budget holds to 18,000 agents.** The naive baseline needs 670.95 ms for the same ten thousand. Each optimization is verified to leave the simulation *bit-identical* to the baseline, so what changed is the cost and not the result.
 
-<!-- Media. Uncomment each line once the file exists in docs/media/ — a commented-out image
-     never renders as a broken one, and this README is the first thing a stranger sees.
 ![Ten thousand agents with all three techniques on, the instrument panel beside the field showing frame time, step time, draw calls and collections](docs/media/10000-agents.png)
 ![Toggling GPU instancing at 10,000 agents: draw calls collapse from ~9,955 to ~63](docs/media/instancing-toggle.gif)
--->
+
+*Part-way through the toggle the panel reads 63 draw calls at the median and 9,989 at the p95 — the window is the last 120 frames, so for a moment it holds both states at once.*
 
 <!-- HEADLINE_TABLE:BEGIN -->
 
