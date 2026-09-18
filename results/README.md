@@ -22,6 +22,23 @@ directory stops being evidence. Every row carries `stepping_mode`, so the two ge
 distinguishable without reading this file, and the table generator refuses to mix rows that disagree
 on the columns that make them comparable.
 
+**`benchmark_InstancingSweep_20260917_103138*` and `benchmark_BudgetCrossing_20260917_103556*` are
+superseded and must not be combined with anything newer.** Their `gpuInstancing` rows measured a
+configuration that was not actually drawing instanced. The instancing material was constructed at
+run time, after the player build had already decided which shader variants to compile, so
+`INSTANCING_ON` was stripped and `Graphics.RenderMeshInstanced` submitted draws the build had no
+variant to execute. The agents were never rasterized. Nothing logged an error and the draw, batch
+and SetPass counters all moved, so the rows read as ordinary; the tell is GPU time, flat at
+0.27-0.31 ms from 12,000 to 24,000 agents and lower than the 0.48 ms recorded at 1,000, because the
+only GPU work in them was the HUD. `Assets/FrameBudget/Resources/AgentInstanced.mat` now carries the
+flag at build time, and `benchmark_InstancingSweep_20260918_104221*` and
+`benchmark_BudgetCrossing_20260918_104330*` replace them. `docs/NOTES.md` has the full account.
+
+These are kept for the same reason as the day-2 files, and for one more: they are the evidence that
+a stripped instancing path is indistinguishable from a working one on every counter this project
+records except GPU time. A reader who wants to see what a silently broken measurement looks like can
+compare the two generations directly.
+
 Each run produces two files that share a base name, `benchmark_<config>_<UTC timestamp>`:
 
 ## `benchmark_<config>_<stamp>.csv` — the summary
