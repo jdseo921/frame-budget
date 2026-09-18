@@ -17,7 +17,7 @@ MonoBehaviour:
   seed: 12345
   fixedTimestep: 0.016666668
   maxStepsPerFrame: 1
-  neighbourRadius: 4
+  neighborRadius: 4
   maxSpeed: 6
   maxAcceleration: 12
   separationWeight: 4

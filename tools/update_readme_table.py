@@ -14,7 +14,7 @@ Method (see docs/METHOD.md):
   * Only release player rows are eligible. Editor rows, batch-mode rows and development-build rows
     are refused, because they do not measure the same program. --allow-editor overrides this for
     inspection, and stamps the table as ineligible.
-  * A data point is one (agent_count, techniques) group. Its runs are summarised as the median of
+  * A data point is one (agent_count, techniques) group. Its runs are summarized as the median of
     the per-run medians, plus the min and max of those per-run medians so run-to-run spread is
     visible rather than hidden.
   * Medians and percentiles use nearest rank -- the same definition as Percentiles.NearestRank in
@@ -259,10 +259,10 @@ def build_table(points: list[Point], csv_name: str) -> str:
 
 
 def build_headline(points: list[Point], agents: int) -> str:
-    """The four numbers that carry the result: baseline against the most-optimised configuration.
+    """The four numbers that carry the result: baseline against the most-optimized configuration.
 
     Both sides are picked from the data rather than named here, so this cannot drift out of step
-    with what was measured: the control is the point labelled "baseline" at the chosen agent count,
+    with what was measured: the control is the point labeled "baseline" at the chosen agent count,
     and the other is whichever point at that count has the most techniques enabled.
     """
     at_count = [p for p in points if p.agents == agents]
@@ -272,7 +272,7 @@ def build_headline(points: list[Point], agents: int) -> str:
     control = next((p for p in at_count if p.techniques == "baseline"), None)
     best = max(at_count, key=lambda p: len(p.techniques.split("+")) if p.techniques != "baseline" else 0)
     if control is None or best is control:
-        raise SystemExit(f"Need both a baseline and an optimised configuration at {agents} agents.")
+        raise SystemExit(f"Need both a baseline and an optimized configuration at {agents} agents.")
 
     def pair(key, fmt):
         a, _, _ = control.summary(key)

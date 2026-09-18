@@ -1,10 +1,10 @@
 # Frame Budget
 
-A game running at 60 frames per second has **16.7 milliseconds** to do everything in a frame — think, move, draw. That is the budget. This project asks a simple question and answers it with measurements rather than opinions: *how many simulated characters fit inside that budget, and how much does each optimisation actually buy you?*
+A game running at 60 frames per second has **16.7 milliseconds** to do everything in a frame — think, move, draw. That is the budget. This project asks a simple question and answers it with measurements rather than opinions: *how many simulated characters fit inside that budget, and how much does each optimization actually buy you?*
 
-It is a small Unity scene full of agents that steer toward a goal while pushing away from their neighbours — the crowd behaviour behind a strategy game's units or a city's pedestrians. It starts from a deliberately slow version, then applies three well-known optimisations one at a time, measuring each one against the slow version it replaces. The point is not that the optimisations work; everyone knows they work. The point is *by how much*, under conditions careful enough that the numbers can be trusted.
+It is a small Unity scene full of agents that steer toward a goal while pushing away from their neighbors — the crowd behavior behind a strategy game's units or a city's pedestrians. It starts from a deliberately slow version, then applies three well-known optimizations one at a time, measuring each one against the slow version it replaces. The point is not that the optimizations work; everyone knows they work. The point is *by how much*, under conditions careful enough that the numbers can be trusted.
 
-**Ten thousand steering agents, simulated and drawn, in 6.15 ms a frame — and the 16.7 ms budget holds to 18,000 agents.** The naive baseline needs 670.95 ms for the same ten thousand. Each optimisation is verified to leave the simulation *bit-identical* to the baseline, so what changed is the cost and not the result.
+**Ten thousand steering agents, simulated and drawn, in 6.15 ms a frame — and the 16.7 ms budget holds to 18,000 agents.** The naive baseline needs 670.95 ms for the same ten thousand. Each optimization is verified to leave the simulation *bit-identical* to the baseline, so what changed is the cost and not the result.
 
 <!-- Media. Uncomment each line once the file exists in docs/media/ — a commented-out image
      never renders as a broken one, and this README is the first thing a stranger sees.
@@ -27,10 +27,10 @@ Every number on this page was measured by this repository, of this repository, o
 
 ## What is here
 
-- **The instrument, built before the first optimisation.** Frame time comes from a `Stopwatch` between frame starts and the profiler's main-thread counter — never `Time.deltaTime`. Simulation time is timed separately from the rest of the frame. Allocation, draw calls and SetPass calls come from counters verified to resolve at start-up; one that fails is reported as *n/a*, never as zero. Everything is a median and a 95th percentile. There are no means anywhere, because means hide spikes and spikes are the point.
-- **The naive baseline.** Agent state lives in parallel arrays of structs rather than per-agent MonoBehaviours, but everything else is deliberately slow and labelled as such in the code: an all-pairs neighbour search, one GameObject per agent, `GetComponent` inside the loop, LINQ in the hot path, and HUD text rebuilt by string concatenation every frame. Each is a control that a later technique removes.
-- **The three techniques**, each a runtime flag measured against its own control inside one interleaved sweep: **spatialHash** (a uniform grid instead of the all-pairs scan), **zeroAlloc** (reused neighbour buffers, no LINQ or closures, digits formatted into a reused builder), and **gpuInstancing** (instanced draws straight from the position array instead of a GameObject each). Two more are deliberately absent — see [Future work](#future-work).
-- **The acceptance rule.** A technique that changes the simulation's arithmetic must produce a **bit-identical** `state_hash` to its control. A neighbour search that quietly returns fewer neighbours is faster *because* it does less, so timing alone cannot be the test — it would reward the bug.
+- **The instrument, built before the first optimization.** Frame time comes from a `Stopwatch` between frame starts and the profiler's main-thread counter — never `Time.deltaTime`. Simulation time is timed separately from the rest of the frame. Allocation, draw calls and SetPass calls come from counters verified to resolve at start-up; one that fails is reported as *n/a*, never as zero. Everything is a median and a 95th percentile. There are no means anywhere, because means hide spikes and spikes are the point.
+- **The naive baseline.** Agent state lives in parallel arrays of structs rather than per-agent MonoBehaviours, but everything else is deliberately slow and labeled as such in the code: an all-pairs neighbor search, one GameObject per agent, `GetComponent` inside the loop, LINQ in the hot path, and HUD text rebuilt by string concatenation every frame. Each is a control that a later technique removes.
+- **The three techniques**, each a runtime flag measured against its own control inside one interleaved sweep: **spatialHash** (a uniform grid instead of the all-pairs scan), **zeroAlloc** (reused neighbor buffers, no LINQ or closures, digits formatted into a reused builder), and **gpuInstancing** (instanced draws straight from the position array instead of a GameObject each). Two more are deliberately absent — see [Future work](#future-work).
+- **The acceptance rule.** A technique that changes the simulation's arithmetic must produce a **bit-identical** `state_hash` to its control. A neighbor search that quietly returns fewer neighbors is faster *because* it does less, so timing alone cannot be the test — it would reward the bug.
 - **The benchmark mode.** Sweeps agent counts and technique combinations from a config asset, discards warm-up frames, and writes two CSVs: a per-point summary and every measured frame, so the summary can be audited rather than trusted. Configurations are interleaved rather than run in blocks, so thermal drift on a laptop spreads across all of them instead of landing on one. Before measuring it asserts vsync and the frame cap are off, and aborts rather than report numbers that describe the display.
 
 ## Running it
@@ -144,7 +144,7 @@ Three things in that table deserve a note.
 
 Two techniques originally sketched for this project are not implemented, and the two reasons are different in kind.
 
-**Tick budgeting** — updating a fraction of the agents each step — cannot satisfy the acceptance rule everything else is held to. Time-slicing deliberately changes what the simulation computes: an agent updated every fourth step follows a different trajectory, and no amount of care makes those floats match. Measuring it honestly would need a different correctness framework — bounding how far trajectories may diverge over how long — which is a larger piece of work than the optimisation itself. Adding it under the current rules would have meant either a false equivalence claim or a silent exception to the one rule this project actually enforces.
+**Tick budgeting** — updating a fraction of the agents each step — cannot satisfy the acceptance rule everything else is held to. Time-slicing deliberately changes what the simulation computes: an agent updated every fourth step follows a different trajectory, and no amount of care makes those floats match. Measuring it honestly would need a different correctness framework — bounding how far trajectories may diverge over how long — which is a larger piece of work than the optimization itself. Adding it under the current rules would have meant either a false equivalence claim or a silent exception to the one rule this project actually enforces.
 
 **Burst parallelisation** is the obvious next step and the groundwork is already there: the packages have been in the manifest since day 1, agent state is already parallel arrays of structs, and the step is already two-phase and order-independent — the shape `IJobParallelFor` wants. The honest reason it is absent is time. It would also be the first technique where bit-identical output is not free, since parallel float reduction depends on partition order.
 
@@ -152,7 +152,7 @@ The measurements say where the remaining cost is. At 18,000 agents the frame is 
 
 ## Not in scope
 
-No pathfinding (steering and goals only), no full DOTS/Entities conversion, no gameplay, menus, art, custom shaders or second scene, and no test suite beyond the equivalence tests that guard the neighbour search.
+No pathfinding (steering and goals only), no full DOTS/Entities conversion, no gameplay, menus, art, custom shaders or second scene, and no test suite beyond the equivalence tests that guard the neighbor search.
 
 ## Rights
 

@@ -5,11 +5,11 @@ using UnityEngine;
 namespace FrameBudget.Tests
 {
     /// <summary>
-    /// The test that decides whether the spatial hash is an optimisation or a bug.
+    /// The test that decides whether the spatial hash is an optimization or a bug.
     ///
-    /// A grid that misses neighbours is fast and wrong, and it fails in the most flattering possible
-    /// way: the fewer neighbours it returns, the better it scores. Timing alone cannot catch that.
-    /// So every case here asserts that UniformGridIndex returns the identical neighbour list to
+    /// A grid that misses neighbors is fast and wrong, and it fails in the most flattering possible
+    /// way: the fewer neighbors it returns, the better it scores. Timing alone cannot catch that.
+    /// So every case here asserts that UniformGridIndex returns the identical neighbor list to
     /// BruteForceIndex - identical contents and identical order, since the caller sums a float force
     /// over them and a reordering is a different simulation.
     ///
@@ -20,11 +20,11 @@ namespace FrameBudget.Tests
     /// </summary>
     public class SpatialIndexEquivalenceTests
     {
-        private static SimConfig MakeConfig(float worldHalfExtent, float neighbourRadius, float cellSize)
+        private static SimConfig MakeConfig(float worldHalfExtent, float neighborRadius, float cellSize)
         {
             SimConfig config = ScriptableObject.CreateInstance<SimConfig>();
             config.worldHalfExtent = worldHalfExtent;
-            config.neighbourRadius = neighbourRadius;
+            config.neighborRadius = neighborRadius;
             config.spatialHashCellSize = cellSize;
             config.seed = 4242;
             config.tickBucketCount = 4;
@@ -42,27 +42,27 @@ namespace FrameBudget.Tests
 
             for (int i = 0; i < world.Count; i++)
             {
-                List<int> expected = brute.Query(world, i, config.neighbourRadius);
-                List<int> actual = grid.Query(world, i, config.neighbourRadius);
+                List<int> expected = brute.Query(world, i, config.neighborRadius);
+                List<int> actual = grid.Query(world, i, config.neighborRadius);
 
                 Assert.That(actual, Is.EqualTo(expected),
                     because + ": agent " + i + " at " + world.Positions[i]
                     + " (cells " + grid.Dimension + "x" + grid.Dimension + " of size " + grid.CellSize
-                    + ", radius " + config.neighbourRadius + ")");
+                    + ", radius " + config.neighborRadius + ")");
             }
         }
 
         [Test]
         public void GridMatchesBruteForce_AcrossAgentCountsAndRadii(
             [Values(1, 2, 64, 500)] int agentCount,
-            [Values(0.5f, 4f, 25f)] float neighbourRadius)
+            [Values(0.5f, 4f, 25f)] float neighborRadius)
         {
-            SimConfig config = MakeConfig(50f, neighbourRadius, 0f);   // cell size 0 = use the radius
+            SimConfig config = MakeConfig(50f, neighborRadius, 0f);   // cell size 0 = use the radius
             try
             {
                 var world = new AgentWorld();
                 world.Respawn(config, agentCount);
-                AssertIndexesAgree(world, config, "count " + agentCount + ", radius " + neighbourRadius);
+                AssertIndexesAgree(world, config, "count " + agentCount + ", radius " + neighborRadius);
             }
             finally
             {
@@ -75,7 +75,7 @@ namespace FrameBudget.Tests
             [Values(0.25f, 1f, 3f, 12f)] float cellSize)
         {
             // Radius fixed at 4: smaller than a 12-unit cell, larger than a 0.25-unit cell by 16x.
-            // The grid must widen its searched ring rather than assuming a single ring of neighbours.
+            // The grid must widen its searched ring rather than assuming a single ring of neighbors.
             SimConfig config = MakeConfig(40f, 4f, cellSize);
             try
             {
@@ -126,19 +126,19 @@ namespace FrameBudget.Tests
         }
 
         /// <summary>
-        /// The zeroAlloc path writes neighbours into one buffer reused across every agent and every
-        /// step, so a query that returns fewer neighbours than the previous one leaves stale indices
+        /// The zeroAlloc path writes neighbors into one buffer reused across every agent and every
+        /// step, so a query that returns fewer neighbors than the previous one leaves stale indices
         /// behind it. Reading past the returned count, or failing to respect it, is the classic way
-        /// to break a buffer-reuse optimisation - and it corrupts the simulation rather than
+        /// to break a buffer-reuse optimization - and it corrupts the simulation rather than
         /// crashing, which is worse. This deliberately reuses a single buffer across all agents, in
-        /// descending order of expected neighbour count, so that any leakage past the count shows up.
+        /// descending order of expected neighbor count, so that any leakage past the count shows up.
         /// </summary>
         [Test]
         public void QueryIntoMatchesQuery_WithOneBufferReusedAcrossEveryAgent(
             [Values(64, 400)] int agentCount,
-            [Values(2f, 8f)] float neighbourRadius)
+            [Values(2f, 8f)] float neighborRadius)
         {
-            SimConfig config = MakeConfig(40f, neighbourRadius, 0f);
+            SimConfig config = MakeConfig(40f, neighborRadius, 0f);
             try
             {
                 var world = new AgentWorld();
@@ -148,21 +148,21 @@ namespace FrameBudget.Tests
                 {
                     index.Rebuild(world, config);
 
-                    // Visit the agents with the most neighbours first, so later shorter queries are
+                    // Visit the agents with the most neighbors first, so later shorter queries are
                     // the ones that would expose stale tail entries.
                     var order = new List<int>();
                     for (int i = 0; i < agentCount; i++) order.Add(i);
-                    order.Sort((a, b) => index.Query(world, b, neighbourRadius).Count
-                                        .CompareTo(index.Query(world, a, neighbourRadius).Count));
+                    order.Sort((a, b) => index.Query(world, b, neighborRadius).Count
+                                        .CompareTo(index.Query(world, a, neighborRadius).Count));
 
                     var buffer = new int[agentCount];
                     foreach (int i in order)
                     {
-                        List<int> expected = index.Query(world, i, neighbourRadius);
-                        int count = index.QueryInto(world, i, neighbourRadius, buffer);
+                        List<int> expected = index.Query(world, i, neighborRadius);
+                        int count = index.QueryInto(world, i, neighborRadius, buffer);
 
                         Assert.That(count, Is.EqualTo(expected.Count),
-                            index.Name + ": agent " + i + " returned a different neighbour count");
+                            index.Name + ": agent " + i + " returned a different neighbor count");
                         for (int k = 0; k < count; k++)
                         {
                             Assert.That(buffer[k], Is.EqualTo(expected[k]),
@@ -194,17 +194,17 @@ namespace FrameBudget.Tests
                 bool sawANonTrivialList = false;
                 for (int i = 0; i < world.Count; i++)
                 {
-                    List<int> neighbours = grid.Query(world, i, config.neighbourRadius);
-                    if (neighbours.Count > 1) sawANonTrivialList = true;
-                    for (int k = 1; k < neighbours.Count; k++)
+                    List<int> neighbors = grid.Query(world, i, config.neighborRadius);
+                    if (neighbors.Count > 1) sawANonTrivialList = true;
+                    for (int k = 1; k < neighbors.Count; k++)
                     {
-                        Assert.That(neighbours[k], Is.GreaterThan(neighbours[k - 1]),
-                            "agent " + i + " neighbour list is not ascending at position " + k);
+                        Assert.That(neighbors[k], Is.GreaterThan(neighbors[k - 1]),
+                            "agent " + i + " neighbor list is not ascending at position " + k);
                     }
                 }
 
                 Assert.That(sawANonTrivialList, Is.True,
-                    "no agent had more than one neighbour, so this test proved nothing about ordering");
+                    "no agent had more than one neighbor, so this test proved nothing about ordering");
             }
             finally
             {

@@ -7,7 +7,7 @@ using Debug = UnityEngine.Debug;
 namespace FrameBudget
 {
     /// <summary>
-    /// The scene's single behaviour. Owns the world, the presenter, the instrument, the HUD and the
+    /// The scene's single behavior. Owns the world, the presenter, the instrument, the HUD and the
     /// benchmark, and runs the simulation on a fixed timestep accumulated from frame time. Order of
     /// work inside a frame: sample the frame that just finished, let the benchmark act on it, apply
     /// any pending respawn, step the simulation zero or more times, present, rebuild the HUD text.
@@ -75,7 +75,7 @@ namespace FrameBudget
         /// <summary>Technique flags currently in force. The benchmark sets these per point; interactive play uses the config's own flags.</summary>
         public TechniqueCombination ActiveTechniques => activeTechniques;
 
-        /// <summary>The neighbour query the next step will use, chosen by the active technique flags.</summary>
+        /// <summary>The neighbor query the next step will use, chosen by the active technique flags.</summary>
         public ISpatialIndex ActiveIndex => activeTechniques.spatialHash ? (ISpatialIndex)uniformGridIndex : bruteForceIndex;
 
         /// <summary>Name of the active index, recorded in the CSV so a row says which implementation produced it.</summary>
@@ -130,7 +130,7 @@ namespace FrameBudget
             presenter = new NaiveAgentPresenter(agentMaterial);
 
             // A runtime copy of the same material with the instancing variant enabled, so the
-            // two presenters draw the same mesh with the same shader and the same colour and
+            // two presenters draw the same mesh with the same shader and the same color and
             // differ only in how the draws are submitted. Made here rather than as a second
             // asset so that the scene needs no extra reference.
             instancedMaterial = new Material(agentMaterial) { name = agentMaterial.name + " (instanced)", enableInstancing = true };
@@ -275,7 +275,7 @@ namespace FrameBudget
 
         /// <summary>
         /// Checks the instrument itself rather than the simulation, in whichever build it is run in.
-        /// The allocation counter is a runtime API whose behaviour under IL2CPP stripping cannot be
+        /// The allocation counter is a runtime API whose behavior under IL2CPP stripping cannot be
         /// assumed, so this allocates several known block sizes and requires the counter to report
         /// each of them. Run with -frameBudgetSelfTest; the process exits with 0 on pass, 1 on fail.
         /// </summary>
@@ -445,7 +445,7 @@ namespace FrameBudget
         {
             Debug.Log("[FrameBudget] Config '" + config.name + "': techniques=" + config.TechniqueLabel + " agents=" + config.agentCount
                       + " seed=" + config.seed + " dt=" + config.fixedTimestep + "s maxSteps/frame=" + config.maxStepsPerFrame
-                      + " world=+-" + config.worldHalfExtent + " neighbourRadius=" + config.neighbourRadius);
+                      + " world=+-" + config.worldHalfExtent + " neighborRadius=" + config.neighborRadius);
         }
 
         private void Fatal(string message)

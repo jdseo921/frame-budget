@@ -6,9 +6,9 @@ namespace FrameBudget
 {
     /// <summary>
     /// A uniform grid over the world square. Agents are bucketed into cells once per step, and a
-    /// query visits only the cells that can possibly contain a neighbour, instead of all n agents.
+    /// query visits only the cells that can possibly contain a neighbor, instead of all n agents.
     /// Cost per step goes from O(n^2) to roughly O(n * k), where k is the number of agents in the
-    /// searched neighbourhood - which, at fixed density and fixed radius, does not grow with n.
+    /// searched neighborhood - which, at fixed density and fixed radius, does not grow with n.
     ///
     /// The bucketing is a counting sort rather than a list-per-cell: two integer arrays, a prefix
     /// table of where each cell's agents begin and a flat array of agent indices. That keeps the
@@ -18,8 +18,8 @@ namespace FrameBudget
     /// Two details are load-bearing rather than incidental:
     ///
     /// <b>Ring count.</b> A query searches every cell within ceil(radius / cellSize) cells of the
-    /// agent's own, not a fixed 3x3. With the default cell size equal to the neighbour radius the
-    /// two are the same thing, but hard-coding 3x3 would silently return an incomplete neighbour set
+    /// agent's own, not a fixed 3x3. With the default cell size equal to the neighbor radius the
+    /// two are the same thing, but hard-coding 3x3 would silently return an incomplete neighbor set
     /// the moment someone made cells smaller than the radius - fast, wrong, and invisible without a
     /// test.
     ///
@@ -45,7 +45,7 @@ namespace FrameBudget
         /// <summary>Cells per axis in the most recent rebuild; exposed for tests and diagnostics.</summary>
         public int Dimension => dimension;
 
-        /// <summary>Cell size in world units actually used, after falling back to the neighbour radius.</summary>
+        /// <summary>Cell size in world units actually used, after falling back to the neighbor radius.</summary>
         public float CellSize => cellSize;
 
         public void Rebuild(AgentWorld world, SimConfig config)
@@ -53,9 +53,9 @@ namespace FrameBudget
             agentCount = world.Count;
             halfExtent = world.HalfExtent;
 
-            // A cell size of zero or less means "use the neighbour radius", which makes the searched
-            // neighbourhood exactly one ring of cells.
-            cellSize = config.spatialHashCellSize > 0f ? config.spatialHashCellSize : config.neighbourRadius;
+            // A cell size of zero or less means "use the neighbor radius", which makes the searched
+            // neighborhood exactly one ring of cells.
+            cellSize = config.spatialHashCellSize > 0f ? config.spatialHashCellSize : config.neighborRadius;
             if (cellSize <= 0f) cellSize = 1f;
 
             dimension = Mathf.Max(1, Mathf.CeilToInt(2f * halfExtent / cellSize));
@@ -190,7 +190,7 @@ namespace FrameBudget
         /// allocation that scales with the number of queries, in the one method the two paths do not
         /// share.
         ///
-        /// Insertion sort is not a compromise here. A neighbourhood holds a handful of agents at
+        /// Insertion sort is not a compromise here. A neighborhood holds a handful of agents at
         /// these densities, and for inputs that small it beats any general-purpose sort outright,
         /// having no partitioning, no recursion and no setup at all.
         /// </summary>

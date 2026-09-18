@@ -19,7 +19,7 @@ all off. Nothing else counts as a result.
 
 **Editor numbers are excluded.** The editor is a different program from the player: it runs the
 script assemblies under the editor's own Mono domain rather than the player's scripting backend, it
-keeps the asset database, inspector and scene view alive alongside the game loop, it re-serialises
+keeps the asset database, inspector and scene view alive alongside the game loop, it re-serializes
 objects the player never touches, and its Game view renders through an editor-owned surface. In
 practice that shows up as a per-frame floor — a cost that exists in every editor frame no matter
 how little the simulation is doing — plus extra variance from editor housekeeping that has nothing
@@ -110,7 +110,7 @@ With one step per frame, a run of `measured_frames` frames executes exactly that
 agent count, so `state_hash` is comparable everywhere and `capped_frames` and `dropped_sim_seconds`
 are always zero in benchmark rows.
 
-**Interactive play keeps the accumulator**, because there it is the right behaviour: frame time
+**Interactive play keeps the accumulator**, because there it is the right behavior: frame time
 decides how many steps run, `SimConfig.maxStepsPerFrame` (default 1) bounds them so a slow frame
 cannot spiral into an ever-longer one, and the simulated time the cap drops is counted into
 `capped_frames` and `dropped_sim_seconds` rather than hidden. Those two columns remain meaningful
@@ -148,7 +148,7 @@ an interpolation between two.
 
 **No means appear anywhere in this project.** A mean is the wrong summary for frame time for two
 reasons. First, frame-time distributions are asymmetric and heavy-tailed: a handful of very slow
-frames drag the mean away from the value that describes typical behaviour, so the mean describes
+frames drag the mean away from the value that describes typical behavior, so the mean describes
 neither the typical frame nor the bad frame. Second, and more importantly here, the spikes *are the
 subject*. One of the later techniques exists specifically to remove garbage-collection spikes; a
 mean would quietly absorb exactly the thing that technique is supposed to fix, and the before/after
@@ -226,24 +226,24 @@ must have identical `state_hash`. If they do not, the simulation is not determin
 before/after comparison in this repository is meaningless, because the configurations would not be
 doing the same work.
 
-### Technique equivalence: an optimisation must change the cost and not the result
+### Technique equivalence: an optimization must change the cost and not the result
 
-From day 3 the same hash carries a second, stronger claim. A faster neighbour query that returns a
-different set of neighbours is not an optimisation, it is a different simulation — and it fails in
-the most flattering direction available, because the fewer neighbours an index returns the better it
+From day 3 the same hash carries a second, stronger claim. A faster neighbor query that returns a
+different set of neighbors is not an optimization, it is a different simulation — and it fails in
+the most flattering direction available, because the fewer neighbors an index returns the better it
 scores. Timing cannot detect that. Only comparing the *result* can.
 
 So every technique that alters the simulation's arithmetic must produce a **bit-identical**
 `state_hash` to its control, at the same seed, agent count and step count. Two things make that
 achievable rather than aspirational:
 
-- **Identical neighbour sets**, asserted by the equivalence tests in `Assets/Tests` across several
+- **Identical neighbor sets**, asserted by the equivalence tests in `Assets/Tests` across several
   agent counts and radii, including a radius smaller than one cell, a radius spanning several cells,
   agents exactly on cell boundaries, and agents pinned to the world edge.
 - **Identical accumulation order.** The separation force is a sum of floating-point vectors and
-  float addition is not associative, so visiting the same neighbours in a different order produces a
+  float addition is not associative, so visiting the same neighbors in a different order produces a
   different sum, a different velocity, and after a few hundred steps a visibly different simulation.
-  Both implementations therefore return neighbours in ascending index order: the brute-force scan by
+  Both implementations therefore return neighbors in ascending index order: the brute-force scan by
   construction, the grid by sorting, since it gathers from cells in grid order.
 
 When this holds, the speed-up is unambiguous — the two runs computed the same thing, so the only
@@ -266,7 +266,7 @@ writes each agent's position into its own `Transform` every frame. That is a con
 of the week's techniques replaces it with instanced drawing straight from the position array, and
 the point is to measure what that replacement is worth. URP's SRP Batcher would already be absorbing
 a large part of that cost — it exists precisely to make many renderers sharing a shader cheap to
-submit — so the "before" side of the comparison would arrive partly optimised by the engine, and the
+submit — so the "before" side of the comparison would arrive partly optimized by the engine, and the
 measured improvement would understate the technique while overstating how naive the starting point
 was. The built-in pipeline with dynamic batching disabled gives a baseline whose draw-call cost is
 attributable to the code, which is what makes the before/after difference mean something.
@@ -313,7 +313,7 @@ Stating the boundary is part of the method. This harness does **not** measure:
   session.
 - **Load time or startup cost.** Scene load, shader warm-up and agent spawn are deliberately
   discarded as warm-up (§4). They are real costs and they are simply not what is being reported.
-- **Mobile or thermally sustained behaviour.** A measured point lasts seconds, not hours. Nothing
+- **Mobile or thermally sustained behavior.** A measured point lasts seconds, not hours. Nothing
   here describes how the workload behaves after ten minutes of sustained load, on a phone, or under
   a different thermal envelope.
 - **Anything about a different machine.** Every row names the machine that produced it. The numbers

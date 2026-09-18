@@ -32,11 +32,11 @@ namespace FrameBudget
         public Vector3[] NextVelocities = Array.Empty<Vector3>();
 
         /// <summary>
-        /// Reused neighbour scratch for the zeroAlloc path, sized for the worst case of every other
+        /// Reused neighbor scratch for the zeroAlloc path, sized for the worst case of every other
         /// agent being in range. Allocated once per respawn rather than once per query, which is the
         /// whole point of the technique. Only the count a query returns is meaningful.
         /// </summary>
-        public int[] NeighbourBuffer = Array.Empty<int>();
+        public int[] NeighborBuffer = Array.Empty<int>();
 
         /// <summary>(Re)creates every agent from the config's seed. Same config and count => identical arrays.</summary>
         public void Respawn(SimConfig config, int count)
@@ -55,7 +55,7 @@ namespace FrameBudget
             TickBuckets = new int[count];
             RngStates = new uint[count];
             NextVelocities = new Vector3[count];
-            NeighbourBuffer = new int[Mathf.Max(count, 1)];
+            NeighborBuffer = new int[Mathf.Max(count, 1)];
 
             uint spawnRng = DeterministicRng.Seed(config.seed, 0);
             float initialSpeedCap = config.maxSpeed * 0.5f;

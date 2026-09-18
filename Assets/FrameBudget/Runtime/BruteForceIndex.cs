@@ -5,7 +5,7 @@ using UnityEngine;
 namespace FrameBudget
 {
     /// <summary>
-    /// The all-pairs neighbour query, extracted unchanged from the original step so that it remains
+    /// The all-pairs neighbor query, extracted unchanged from the original step so that it remains
     /// a genuine control rather than a rewritten approximation of one. Every agent tests every other
     /// agent: O(n^2) comparisons per step.
     ///

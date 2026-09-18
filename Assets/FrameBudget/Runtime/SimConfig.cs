@@ -5,7 +5,7 @@ using UnityEngine;
 namespace FrameBudget
 {
     /// <summary>
-    /// One point on the technique axis. Kept as a serialisable struct rather than reusing the
+    /// One point on the technique axis. Kept as a serializable struct rather than reusing the
     /// config's own flags so that a single sweep can measure several combinations against each
     /// other, interleaved, without mutating the asset it was launched from.
     /// </summary>
@@ -39,7 +39,7 @@ namespace FrameBudget
     /// <summary>
     /// Everything a run needs in order to be reproduced. One asset describes one run:
     /// same asset, same simulation, same workload. Technique flags all default to false;
-    /// each one is a control condition today and a measured optimisation later in the week.
+    /// each one is a control condition today and a measured optimization later in the week.
     /// </summary>
     [CreateAssetMenu(fileName = "SimConfig", menuName = "Frame Budget/Sim Config")]
     public sealed class SimConfig : ScriptableObject
@@ -47,7 +47,7 @@ namespace FrameBudget
         [Header("Simulation")]
         [Min(0)] public int agentCount = 1000;
 
-        [Tooltip("The world is a square on the XZ plane centred on the origin, extending this far in +/-X and +/-Z.")]
+        [Tooltip("The world is a square on the XZ plane centered on the origin, extending this far in +/-X and +/-Z.")]
         [Min(1f)] public float worldHalfExtent = 100f;
 
         [Tooltip("Seed for every random decision: spawn positions, initial velocities, goals. Same seed + same config = same simulation.")]
@@ -60,16 +60,16 @@ namespace FrameBudget
         [Range(1, 8)] public int maxStepsPerFrame = 1;
 
         [Header("Steering")]
-        [Min(0.01f)] public float neighbourRadius = 4f;
+        [Min(0.01f)] public float neighborRadius = 4f;
         [Min(0.01f)] public float maxSpeed = 6f;
         [Min(0.01f)] public float maxAcceleration = 12f;
         [Min(0f)] public float separationWeight = 4f;
         [Min(0.01f)] public float goalReachedRadius = 1f;
 
-        [Tooltip("Agents are labelled with a tick bucket at spawn. The naive baseline updates every agent every step regardless; the tickBudget technique will update one bucket per step.")]
+        [Tooltip("Agents are labeled with a tick bucket at spawn. The naive baseline updates every agent every step regardless; the tickBudget technique will update one bucket per step.")]
         [Min(1)] public int tickBucketCount = 4;
 
-        [Tooltip("Side length of a uniform-grid cell in world units, used when the spatialHash technique is on. Zero means use the neighbour radius, which makes the searched neighbourhood exactly one ring of cells. Smaller cells mean more cells to visit but fewer agents rejected per cell; the query widens its ring automatically so a smaller cell size stays correct.")]
+        [Tooltip("Side length of a uniform-grid cell in world units, used when the spatialHash technique is on. Zero means use the neighbor radius, which makes the searched neighborhood exactly one ring of cells. Smaller cells mean more cells to visit but fewer agents rejected per cell; the query widens its ring automatically so a smaller cell size stays correct.")]
         [Min(0f)] public float spatialHashCellSize;
 
         [Header("Benchmark")]
@@ -138,7 +138,7 @@ namespace FrameBudget
             if (worldHalfExtent <= 0f) sb.Append("worldHalfExtent must be > 0. ");
             if (fixedTimestep <= 0f) sb.Append("fixedTimestep must be > 0. ");
             if (maxStepsPerFrame < 1) sb.Append("maxStepsPerFrame must be >= 1. ");
-            if (neighbourRadius <= 0f) sb.Append("neighbourRadius must be > 0. ");
+            if (neighborRadius <= 0f) sb.Append("neighborRadius must be > 0. ");
             if (maxSpeed <= 0f) sb.Append("maxSpeed must be > 0. ");
             if (maxAcceleration <= 0f) sb.Append("maxAcceleration must be > 0. ");
             if (goalReachedRadius <= 0f) sb.Append("goalReachedRadius must be > 0. ");

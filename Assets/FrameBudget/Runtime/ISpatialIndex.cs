@@ -8,18 +8,18 @@ namespace FrameBudget
     /// and spatial-hash configurations differ in exactly one thing and are measured by the same
     /// harness in the same run.
     ///
-    /// The contract is deliberately strict about two properties, because a faster neighbour query
-    /// that returns a different answer is not an optimisation, it is a different simulation:
+    /// The contract is deliberately strict about two properties, because a faster neighbor query
+    /// that returns a different answer is not an optimization, it is a different simulation:
     ///
     /// 1. <b>Same set.</b> A query must return exactly the agents j != i whose squared distance from
     ///    agent i is strictly less than radius squared. Not approximately; exactly. An index that
-    ///    misses distant-but-in-range neighbours is fast and wrong, and the equivalence test in
+    ///    misses distant-but-in-range neighbors is fast and wrong, and the equivalence test in
     ///    Assets/Tests exists to catch precisely that.
     /// 2. <b>Same order.</b> The results must be in ascending index order. The caller sums a
     ///    separation force over them, floating-point addition is not associative, and so a different
     ///    visiting order produces a different sum, a different velocity, and after a few hundred
     ///    steps a visibly different simulation. Ascending order in both implementations is what lets
-    ///    the project claim the optimisation changed the cost and not the result - a claim that
+    ///    the project claim the optimization changed the cost and not the result - a claim that
     ///    state_hash then verifies bit-for-bit.
     /// </summary>
     public interface ISpatialIndex
@@ -42,7 +42,7 @@ namespace FrameBudget
         List<int> Query(AgentWorld world, int agentIndex, float radius);
 
         /// <summary>
-        /// The same neighbours, written into a caller-owned buffer instead of a new list, returning
+        /// The same neighbors, written into a caller-owned buffer instead of a new list, returning
         /// how many were written. The buffer must hold at least <c>world.Count</c> entries.
         ///
         /// This must produce exactly what <see cref="Query"/> produces - the same indices in the

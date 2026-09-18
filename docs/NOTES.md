@@ -118,7 +118,7 @@ instancing day, because that day's claim will rest on these two counters.
 
 **`other_ms` is a residual, not a measurement.** It is computed as
 `frame − simulation − present`, so it absorbs rendering, engine work, and any error in the two
-quantities subtracted from it. In its favour: across all 16,500 measured frames in today's two
+quantities subtracted from it. In its favor: across all 16,500 measured frames in today's two
 sweeps it was never negative, which it would be if the sub-measurements were overlapping or
 double-counting. That is a useful consistency check and I am recording it, but the column should
 still be read as "everything else" rather than as a timed quantity.
@@ -185,7 +185,7 @@ element, and the heavy points that followed inherited the heat. One step per fra
 about 330 frames per second at 500 agents, and the whole sweep runs cooler and flatter. The tighter
 spread is a real improvement in the instrument, not a faster simulation.
 
-That leaves roughly 4% unexplained by temperature. The likely cause is that extracting the neighbour
+That leaves roughly 4% unexplained by temperature. The likely cause is that extracting the neighbor
 query into `BruteForceIndex.Query` changed the shape of the LINQ closure: the old code's lambda
 captured `i` from the enclosing `for` loop and `pos` from the loop body, which needs two chained
 compiler-generated display classes per agent per step, while the extracted method captures
@@ -205,16 +205,16 @@ grid were genuinely linear against a quadratic baseline. It does not: from 1,000
 speedup actually *falls* slightly (×0.95), and from 5,000 to 10,000 it grows ×1.21 against a
 predicted ×2.0.
 
-The textbook claim quietly assumes `k`, the number of agents in the searched neighbourhood, is
+The textbook claim quietly assumes `k`, the number of agents in the searched neighborhood, is
 constant. Here it cannot be. The world is a fixed 200×200 square, so doubling the agent count
-doubles the density, and a neighbourhood of fixed radius therefore holds twice as many agents.
+doubles the density, and a neighborhood of fixed radius therefore holds twice as many agents.
 `k` is proportional to `n`, which makes `O(n·k)` quadratic too. The grid is not changing the
 complexity class at all — it is winning a large constant factor, by testing the agents in nine cells
 instead of all of them, and the ratio of those two areas is what the speedup is really measuring.
 
 What growth there is comes from the opposite direction: per-query fixed costs. Allocating a `List`,
 sorting it, and rebuilding the grid once per step are all charged whether the query finds one
-neighbour or twenty, so at 1,000 agents — where a neighbourhood holds barely one other agent — they
+neighbor or twenty, so at 1,000 agents — where a neighborhood holds barely one other agent — they
 dominate, and they amortise as density rises. That is why the curve rises from 32× to 58× rather
 than staying flat.
 
@@ -231,12 +231,12 @@ be resisted until a later technique actually puts it under the line.
 **The bit-identical check passed at every agent count**, which is what makes the speedup claim
 usable: 1,000 / 2,000 / 5,000 / 10,000 agents all produce the same `state_hash` from both indexes at
 360 steps. The two runs computed the same floating-point state; only the cost differed. Given a
-58× improvement, that check is doing real work — an index that silently dropped neighbours would
+58× improvement, that check is doing real work — an index that silently dropped neighbors would
 look similar in the timing and would have failed here immediately.
 
 **Collections roughly halved but did not disappear, which is the techniques staying separable.**
 Gen-0 collections over 300 measured frames fall from 375 to 145 at 1,000 agents and from 4,448 to
-2,014 at 10,000. The grid finds fewer neighbours so the `List` it returns is smaller, but it still
+2,014 at 10,000. The grid finds fewer neighbors so the `List` it returns is smaller, but it still
 allocates one per query, and the brute-force control still runs its LINQ chain. That is deliberate:
 if the grid had returned a pooled buffer, this sweep would have measured the spatial hash and the
 allocation fix together and neither could have been attributed. Removing the allocation is day 4's
@@ -252,7 +252,7 @@ is the same milliseconds counted twice.
 
 This is not a disappointment, it is the expected shape, and it is the reason the matrix was worth
 running rather than assuming the deltas add. Both techniques attack the same quantity: the per-agent
-neighbour query. The spatial hash makes the query examine a handful of candidates instead of ten
+neighbor query. The spatial hash makes the query examine a handful of candidates instead of ten
 thousand; removing allocation makes each examination cheaper and stops the collector running. Once
 the hash has cut the work by fifty-fold there is very little allocation left to remove, and once the
 allocation is gone the scan is much cheaper to do exhaustively. Neither is worth much *after* the
@@ -279,7 +279,7 @@ substantially faster — 10,000 agents went from 12.57 ms to 9.84 ms, and the st
 What makes this the day's most useful lesson: the bug was invisible to every check except the one
 that compared two cells of a matrix which differed by a single flag. Timing alone said the
 configuration was fast. The equivalence tests passed, because the sort was correct. Only running the
-full cross-product and noticing that one cell allocated where its neighbour did not exposed it.
+full cross-product and noticing that one cell allocated where its neighbor did not exposed it.
 
 **Instancing confirmed day 3's SetPass model rather than merely agreeing with it.** Day 3 concluded
 SetPass counts renderer batch groups rather than draw calls, from an experiment that changed batching

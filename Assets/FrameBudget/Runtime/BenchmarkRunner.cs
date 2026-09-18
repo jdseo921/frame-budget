@@ -262,7 +262,7 @@ namespace FrameBudget
             string mainStats = metrics.MainThreadValid ? Stats(mainThreadMs, measured, false) : ",";
             string gpuStats = metrics.GpuFrameTimeValid ? Stats(gpuMs, measured, false) : ",";
             // Frames whose allocation was invalidated by a collection hold -1 and must not reach the
-            // percentile pass; compact the valid ones to the front and summarise only those.
+            // percentile pass; compact the valid ones to the front and summarize only those.
             int validGc = 0;
             for (int i = 0; i < measured; i++)
             {

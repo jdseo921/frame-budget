@@ -6,14 +6,14 @@ namespace FrameBudget
     /// <summary>
     /// One fixed-timestep step of seek-to-goal plus separation steering.
     ///
-    /// The neighbour query is the only part that varies: it comes in through <see cref="ISpatialIndex"/>
+    /// The neighbor query is the only part that varies: it comes in through <see cref="ISpatialIndex"/>
     /// so that the brute-force control and the spatial hash can be swapped from a config flag and
     /// measured by the same harness, in the same sweep, with everything else held identical. The
     /// index's per-step rebuild happens inside the timed region, because a technique's setup cost is
     /// part of its cost.
     ///
-    /// Allocation is the second axis. With zeroAlloc off, the neighbour query returns a freshly
-    /// allocated list per agent per step; with it on, the same neighbours are written into a buffer
+    /// Allocation is the second axis. With zeroAlloc off, the neighbor query returns a freshly
+    /// allocated list per agent per step; with it on, the same neighbors are written into a buffer
     /// reused across every agent and every step. Both branches must visit identical indices in
     /// identical order, because the acceptance criterion is a bit-identical simulation.
     ///
@@ -36,7 +36,7 @@ namespace FrameBudget
             Vector3[] next = world.NextVelocities;
             uint[] rngStates = world.RngStates;
 
-            float radius = config.neighbourRadius;
+            float radius = config.neighborRadius;
             float maxSpeed = config.maxSpeed;
             float maxVelocityDelta = config.maxAcceleration * dt;
             float separationWeight = config.separationWeight;
@@ -51,7 +51,7 @@ namespace FrameBudget
             // Phase 1 - steering. Reads only the previous step's state and writes NextVelocities, so
             // the result does not depend on the order agents are visited in. That keeps the later
             // parallel versions comparable with this one instead of "different but probably fine".
-            int[] buffer = world.NeighbourBuffer;
+            int[] buffer = world.NeighborBuffer;
             bool zeroAlloc = techniques.zeroAlloc;
 
             for (int i = 0; i < n; i++)
@@ -79,10 +79,10 @@ namespace FrameBudget
                 {
                     // CONTROL: a List is allocated per agent per step, and the brute-force index
                     //          builds it through a LINQ chain with a capturing closure.
-                    List<int> neighbours = index.Query(world, i, radius);
-                    for (int k = 0; k < neighbours.Count; k++)
+                    List<int> neighbors = index.Query(world, i, radius);
+                    for (int k = 0; k < neighbors.Count; k++)
                     {
-                        Vector3 away = pos - positions[neighbours[k]];
+                        Vector3 away = pos - positions[neighbors[k]];
                         float distSq = Mathf.Max(away.sqrMagnitude, 1e-4f);
                         separation += away / distSq;
                     }
