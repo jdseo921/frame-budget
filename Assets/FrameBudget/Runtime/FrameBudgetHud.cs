@@ -6,7 +6,7 @@
 // Which techniques are on was readable only by parsing the title line, so on camera a key press
 // changed no visible state - the reader saw a number move somewhere else and had to take on trust
 // what caused it. In a muted half-size GIF that is not a measurement at all. The panel states each
-// technique as colour first and text second, and names the run mode, because "0 step/frame" beside
+// technique as color first and text second, and names the run mode, because "0 step/frame" beside
 // a simulation figure reads as a contradiction in interactive play. Nothing else is unfrozen, and
 // the panel obeys the allocation rule the results depend on: see DrawTechniquePanel.
 using System;
@@ -42,7 +42,7 @@ namespace FrameBudget
         private static readonly Color PanelBackground = new Color(0.10f, 0.10f, 0.12f, 1f);
         private static readonly Color Separator = new Color(0.35f, 0.35f, 0.40f, 1f);
 
-        // Technique panel. Sized and coloured for a 1280x720 capture watched at half size with no
+        // Technique panel. Sized and colored for a 1280x720 capture watched at half size with no
         // sound: the row tint and the state pill are two independent cues, so ON and OFF are
         // distinguishable before any text is legible.
         private const float TechniqueRowHeight = 34f;

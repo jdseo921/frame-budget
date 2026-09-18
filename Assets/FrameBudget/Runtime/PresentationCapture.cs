@@ -43,8 +43,8 @@ namespace FrameBudget
         /// Capture every nth rendered frame. At roughly 5.6 ms a frame the app runs near 180 fps, so
         /// every 18th frame is a 10 fps clip at close to real-time speed and leaves about 94% of
         /// frames untouched by a readback. Those captured frames are kept out of the metric windows
-        /// as well (see <see cref="FrameMetrics.DiscardNextSample"/>), but keeping them a small
-        /// minority is what stops the capture changing the behaviour it is filming.
+        /// as well (see <see cref="FrameMetrics.DiscardNextSamples"/>), but keeping them a small
+        /// minority is what stops the capture changing the behavior it is filming.
         /// </summary>
         public const int DefaultClipInterval = 18;
 

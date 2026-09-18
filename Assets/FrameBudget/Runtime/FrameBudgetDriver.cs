@@ -192,7 +192,7 @@ namespace FrameBudget
             }
 
             // Presentation capture. One test at start-up and nothing else: without the flag neither
-            // behaviour is constructed, so a normal run carries no part of this path.
+            // behavior is constructed, so a normal run carries no part of this path.
             if (PresentationCapture.ClipRequested)
             {
                 BenchmarkLaunch.MarkUnattended();

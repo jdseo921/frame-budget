@@ -51,7 +51,7 @@ namespace FrameBudget
             if (QualitySettings.vSyncCount != 0)
             {
                 problems.Append("QualitySettings.vSyncCount is ").Append(QualitySettings.vSyncCount)
-                        .Append(" after being set to 0 - every frame time would be quantised to the display's refresh interval. ");
+                        .Append(" after being set to 0 - every frame time would be quantized to the display's refresh interval. ");
             }
             if (Application.targetFrameRate > 0)
             {

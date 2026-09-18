@@ -54,7 +54,7 @@ pwsh -File tools/capture_readme_clip.ps1
 ```
 
 The player writes a numbered PNG sequence through `-frameBudgetClip` and the script assembles it
-with ffmpeg, using the two-pass `palettegen`/`paletteuse` filter — a single pass quantises to a
+with ffmpeg, using the two-pass `palettegen`/`paletteuse` filter — a single pass quantizes to a
 generic palette and puts visible banding across the agent field and dither noise through the panel
 text. The sequence is an intermediate and is deleted afterwards; only the GIF is committed. If
 ffmpeg is not on PATH the script says so, prints `winget install ffmpeg`, and leaves the PNG folder
@@ -68,7 +68,7 @@ before state, the switch, four seconds after.
 **The switch does not respawn.** Instancing changes how the same agents are submitted, so the field
 has to be identical either side of the cut; that is what makes the point land. Measured rather than
 assumed: the frame-to-frame difference across the cut is no larger than between any other pair of
-neighbouring frames.
+neighboring frames.
 
 Start from two techniques rather than none. With all three off, 10,000 agents costs about 671 ms a
 frame — roughly 1.5 frames per second — and a clip of that does not read as *slow*, it reads as
@@ -79,7 +79,7 @@ believable, and leaves one variable changing on screen.
 **The draw-call collapse is the point**, from about 9,955 to 63 while the frame time moves
 comparatively little. That asymmetry is the interesting part: it is the clearest single frame of
 evidence that this workload is CPU-bound in the simulation rather than in rendering. The technique
-panel makes the cause visible — row 3 flips from a dim grey `OFF` to a bright green `ON` — so the
+panel makes the cause visible — row 3 flips from a dim gray `OFF` to a bright green `ON` — so the
 number and the reason for it are on screen together. The counter itself takes a moment to fall,
 because the panel reports a median over the last 120 frames rather than an instantaneous count.
 

@@ -90,7 +90,7 @@ if (-not $ffmpeg) {
 }
 
 # Two passes. palettegen builds a palette from the actual frames and paletteuse maps to it, which
-# is worth the extra pass here: a single-pass GIF quantises to a generic 256-colour palette and puts
+# is worth the extra pass here: a single-pass GIF quantizes to a generic 256-color palette and puts
 # visible banding across the agent field and dither noise through the panel text.
 function Build-Gif([int]$rate, [int]$scaleWidth) {
     $palette = Join-Path $frames 'palette.png'
