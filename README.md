@@ -1,6 +1,10 @@
 # Frame Budget
 
-**Ten thousand steering agents, simulated and drawn, in 6.15 ms a frame — and the 16.7 ms budget holds to 18,000 agents.** The deliberately naive baseline this repository started from needs 670.95 ms for the same ten thousand. Three optimisations close that gap, each measured against its own control inside one interleaved sweep, and each verified to leave the simulation *bit-identical* to the baseline — so what changed is the cost and not the result.
+A game running at 60 frames per second has **16.7 milliseconds** to do everything in a frame — think, move, draw. That is the budget. This project asks a simple question and answers it with measurements rather than opinions: *how many simulated characters fit inside that budget, and how much does each optimisation actually buy you?*
+
+It is a small Unity scene full of agents that steer toward a goal while pushing away from their neighbours — the crowd behaviour behind a strategy game's units or a city's pedestrians. It starts from a deliberately slow version, then applies three well-known optimisations one at a time, measuring each one against the slow version it replaces. The point is not that the optimisations work; everyone knows they work. The point is *by how much*, under conditions careful enough that the numbers can be trusted.
+
+**Ten thousand steering agents, simulated and drawn, in 6.15 ms a frame — and the 16.7 ms budget holds to 18,000 agents.** The naive baseline needs 670.95 ms for the same ten thousand. Each optimisation is verified to leave the simulation *bit-identical* to the baseline, so what changed is the cost and not the result.
 
 <!-- Media. Uncomment each line once the file exists in docs/media/ — a commented-out image
      never renders as a broken one, and this README is the first thing a stranger sees.
@@ -19,50 +23,41 @@
 
 <!-- HEADLINE_TABLE:END -->
 
-A single-scene Unity benchmark that simulates a crowd of simple steering agents and measures what they cost. The measuring instrument shipped before the first optimisation did, so every number on this page is a measurement taken by this repository, of this repository, on a release build. Nothing in any table is typed in by hand — `tools/update_readme_table.py` regenerates them from the CSVs in `results/`.
+Every number on this page was measured by this repository, of this repository, on a release build. Nothing in any table is typed by hand — `tools/update_readme_table.py` regenerates them from the CSVs in `results/`.
 
 ## What is here
 
-- **The instrument.** Frame time is measured two ways, neither of which is `Time.deltaTime`: a `Stopwatch` interval between consecutive frame starts, and the profiler's main-thread counter. Simulation time is a `Stopwatch` and a `ProfilerMarker` around the fixed-timestep step, kept separate from total frame time. GC allocated per frame, draw calls and SetPass calls come from `ProfilerRecorder` counters whose names are verified to resolve at start-up; a counter that fails to resolve is reported as *n/a*, never as zero. Everything is reported as a median and a tail value (the ninety-fifth percentile) over a rolling window. There are no means anywhere: means hide spikes, and spikes are the point.
-- **The naive baseline.** Agent state lives in parallel arrays of structs, not in per-agent MonoBehaviours. In benchmark mode the simulation runs exactly one fixed-timestep step per frame, so frame cost and step cost describe the same work in every row. Everything else is deliberately unoptimised and labelled as such in the code: an all-pairs neighbour query, one GameObject per agent, `GetComponent` inside the per-agent loop, LINQ in the hot path, and HUD text rebuilt by string concatenation every frame. Each of these is a control condition that a later technique removes.
-- **The techniques.** Each is a runtime flag measured against its own control inside a single sweep, interleaved with it, so a comparison never spans a thermal ramp. A technique that alters the simulation's arithmetic must produce a **bit-identical** `state_hash` to its control at the same seed and step count: a faster neighbour query that returns a different set of neighbours is not an optimisation but a different simulation, and it fails flatteringly, so timing alone cannot be the acceptance test. Three are implemented: **spatialHash** (a uniform grid replacing the all-pairs scan), **zeroAlloc** (pre-allocated neighbour buffers, no LINQ or closures in the step, and a HUD that formats digits into a reused buffer), and **gpuInstancing** (instanced draws issued straight from the position array instead of a GameObject per agent). Two are deliberately absent — see [Future work](#future-work).
-- **The HUD.** IMGUI, sized to be readable in a screen recording, drawn in its own column beside the world view rather than over it: agent count, simulation time, frame time, GC per frame, draw calls, SetPass calls, and a rolling frame-time graph with the sixty-frames-per-second budget drawn across it.
-- **The benchmark mode.** Sweeps agent counts from a `SimConfig` asset, discards warm-up frames, records the measured frames and writes two CSVs — a summary with medians and tails per (agent count, technique combination, run), and every measured frame so the summary can be audited. Runs of a configuration are interleaved rather than blocked, so thermal drift on a laptop spreads across configurations instead of landing on one. `-frameBudgetOutput <dir>` sends them into `results/`; without it they go to `Application.persistentDataPath`. Before measuring anything it asserts that vsync and the frame cap are off, and aborts the run rather than reporting numbers that describe the display.
+- **The instrument, built before the first optimisation.** Frame time comes from a `Stopwatch` between frame starts and the profiler's main-thread counter — never `Time.deltaTime`. Simulation time is timed separately from the rest of the frame. Allocation, draw calls and SetPass calls come from counters verified to resolve at start-up; one that fails is reported as *n/a*, never as zero. Everything is a median and a 95th percentile. There are no means anywhere, because means hide spikes and spikes are the point.
+- **The naive baseline.** Agent state lives in parallel arrays of structs rather than per-agent MonoBehaviours, but everything else is deliberately slow and labelled as such in the code: an all-pairs neighbour search, one GameObject per agent, `GetComponent` inside the loop, LINQ in the hot path, and HUD text rebuilt by string concatenation every frame. Each is a control that a later technique removes.
+- **The three techniques**, each a runtime flag measured against its own control inside one interleaved sweep: **spatialHash** (a uniform grid instead of the all-pairs scan), **zeroAlloc** (reused neighbour buffers, no LINQ or closures, digits formatted into a reused builder), and **gpuInstancing** (instanced draws straight from the position array instead of a GameObject each). Two more are deliberately absent — see [Future work](#future-work).
+- **The acceptance rule.** A technique that changes the simulation's arithmetic must produce a **bit-identical** `state_hash` to its control. A neighbour search that quietly returns fewer neighbours is faster *because* it does less, so timing alone cannot be the test — it would reward the bug.
+- **The benchmark mode.** Sweeps agent counts and technique combinations from a config asset, discards warm-up frames, and writes two CSVs: a per-point summary and every measured frame, so the summary can be audited rather than trusted. Configurations are interleaved rather than run in blocks, so thermal drift on a laptop spreads across all of them instead of landing on one. Before measuring it asserts vsync and the frame cap are off, and aborts rather than report numbers that describe the display.
 
 ## Running it
 
-Open the project with the Unity version recorded in `ProjectSettings/ProjectVersion.txt`, open `Assets/FrameBudget/Scenes/FrameBudget.unity`, press Play. Press **1**, **2** and **3** to toggle the spatial hash, the allocation-free path and instanced drawing, and watch the frame-time graph move; each toggle respawns from the same seed, so the before and after simulate the same agents. Change the agent count with the arrow and page keys or the on-screen controls; press **B** to start the benchmark from the assigned config, **R** to respawn, **H** to hide the HUD (which also shows you the HUD's own cost).
+Open the project with the Unity version in `ProjectSettings/ProjectVersion.txt`, open `Assets/FrameBudget/Scenes/FrameBudget.unity` and press Play.
+
+Press **1**, **2**, **3** to toggle the three techniques and watch the frame-time graph move — each toggle respawns from the same seed, so before and after simulate the same agents. Arrow and page keys change the agent count, **B** runs a sweep, **R** respawns, **H** hides the HUD (which also shows what the HUD itself costs).
 
 ### Producing results
 
-Results come from a release player, never the editor. Build one, then run it:
+Results come from a release player, never the editor:
 
 ```
-<path to Unity.exe> -batchmode -quit -projectPath <this repository> -executeMethod FrameBudget.EditorTools.BuildBenchmark.Build -frameBudgetBuildPath Builds/Windows64/FrameBudget.exe -logFile <log>
+<Unity.exe> -batchmode -quit -projectPath <this repository> -executeMethod FrameBudget.EditorTools.BuildBenchmark.Build -frameBudgetBuildPath Builds/Windows64/FrameBudget.exe -logFile <log>
 ```
 
 ```
-Builds/Windows64/FrameBudget.exe -frameBudgetBenchmark -frameBudgetConfig BaselineSweep -frameBudgetOutput results -screen-fullscreen 0 -screen-width 1280 -screen-height 720 -logFile <log>
+Builds/Windows64/FrameBudget.exe -frameBudgetBenchmark -frameBudgetConfig TechniqueMatrix -frameBudgetOutput results -screen-fullscreen 0 -screen-width 1280 -screen-height 720 -logFile <log>
 ```
 
-The build requires the Windows IL2CPP module; it stops with installation instructions rather than silently producing a Mono player, because Mono and IL2CPP timings are not comparable. The CSV paths are printed to the log on completion, after which `tools/update_readme_table.py` regenerates the table above.
+The build needs the Windows IL2CPP module and stops with installation instructions rather than silently producing a Mono player, because Mono and IL2CPP timings are not comparable. CSV paths are printed to the log, after which `tools/update_readme_table.py` regenerates the tables here.
 
-The same benchmark can also be run in the editor, which is useful for developing the harness and useless as evidence:
-
-```
-<path to Unity.exe> -batchmode -projectPath <this repository> -executeMethod FrameBudget.BenchmarkCli.Run -frameBudgetConfig Benchmark10k -logFile <log>
-```
-
-Two honesty notes about unattended runs:
-
-- **`-batchmode` does not render.** There is no Game view, so draw calls and SetPass calls read zero and frame time excludes rendering entirely; the runner warns about this in the log and the CSV records `is_batchmode`. It measures the simulation, not the frame. For rendering-inclusive numbers run the same command **without** `-batchmode` (the editor opens, runs the sweep in Play mode, and exits by itself), or run a Player build with `-frameBudgetBenchmark -frameBudgetConfig <name>`.
-- **Editor numbers are editor numbers.** Every row records whether it came from the editor or a player. Editor frames carry editor overhead; treat editor rows as relative, not absolute.
-
-Reading the summary CSV: `step_ms_*` is the cost of one simulation step and is the column that answers "what does a step of N agents cost". `sim_ms_per_frame_*` is the simulation time spent in a frame; at low agent counts frames outrun the fixed timestep, most frames run no step, and its median is legitimately zero. `steps_in_window` tells you how many steps the step statistics rest on. `capped_frames` and `dropped_sim_seconds` are non-zero when the simulation could not keep up with real time. `state_hash` is a hash of the final agent state: two rows with the same seed and the same `sim_steps_total` must have the same hash, which is how the reproducibility claim is checked.
+Two things not to misread: **`-batchmode` does not render**, so draw calls read zero and frame time excludes rendering — it measures the simulation, not the frame. And **editor numbers are editor numbers**; every row records which it came from. `results/README.md` explains the columns, and `docs/METHOD.md` is the measurement protocol.
 
 ## Results
 
-Every cell below is filled from the benchmark CSV by `tools/update_readme_table.py`. Nothing here is typed in by hand. The measurement protocol is `docs/METHOD.md`; the raw CSVs are in `results/`.
+The measurement protocol is `docs/METHOD.md`; the raw CSVs are in `results/`.
 
 <!-- RESULTS_TABLE:BEGIN -->
 
@@ -99,19 +94,15 @@ Every cell below is filled from the benchmark CSV by `tools/update_readme_table.
 
 <!-- RESULTS_TABLE:END -->
 
-"Median" is the median of the per-run medians and "run spread" is the minimum and maximum of those same per-run medians, so run-to-run variation is visible rather than averaged away. Machine, Unity version, scripting backend, render pipeline and the achieved frame-pacing settings for every row are recorded in the CSV alongside the numbers.
+"Median" is the median of the per-run medians; "run spread" is the minimum and maximum of those same medians, so run-to-run variation stays visible instead of being averaged away. Machine, Unity version, scripting backend, render pipeline and the achieved frame-pacing settings are recorded in the CSV beside every row.
 
-Three columns deserve a note.
+Three things in that table deserve a note.
 
-**Allocation is measured as managed heap growth, not as cumulative bytes allocated.** The profiler's per-frame allocation counter does not exist in a release player, so `AllocationProbe` uses `GC.GetTotalMemory` instead, verified against a known allocation on every run. Unity's collector reclaims only when it collects, so between collections a rise in heap size is exactly the bytes allocated — and across a collection it is not, since the heap can shrink while a great deal was allocated. Frames in which a collection ran are therefore excluded from **GC alloc / frame**, which is why that cell is blank wherever allocation is heavy enough to collect in most frames. Blank means *not measurable in that row*, never zero.
+**Allocation is measured as heap growth, not cumulative bytes.** The profiler's per-frame allocation counter does not exist in a release player, so the harness uses `GC.GetTotalMemory`, verified against a known allocation on every run. Memory is reclaimed only when the collector runs, so between collections a rise in heap size *is* the bytes allocated — and across a collection it is not. Frames in which a collection ran are therefore excluded from **GC alloc / frame**, which is why that cell is blank wherever allocation is heavy. Blank means *not measurable in that row*, never zero. **GC collections / frame** is the primary metric for that reason: it is measured in every row however heavy the allocation, and it counts the thing that actually costs frame time, because a collection is a pause.
 
-**Two p95 figures are much larger than their medians, and the cause is not the code.** `baseline` at 5,000 agents and `zeroAlloc` at 10,000 agents show tail values around 500 ms against medians of 174 ms and 71 ms. Tracing them in the per-frame CSVs: the affected frames are scattered through the measured window rather than clustered at its start, so this is not warm-up leaking past the discard; simulation and presentation time in those frames are entirely normal, and the whole excess sits in the `other` residual, on the main thread. The stalls arrive about every 1.56 seconds of wall-clock in both configurations, and each one pads its frame to a near-constant ~500 ms. They never appear in any configuration whose frames are shorter than about 50 ms, nor in `baseline` at 10,000 agents, whose frames already exceed 500 ms and so have nothing to pad. It is an environmental stall outside the benchmark — left in the data rather than filtered out, and the reason every headline figure in this repository is a median.
+**Two p95 figures are far above their medians, and the cause is not the code.** `baseline` at 5,000 agents and `zeroAlloc` at 10,000 show tails near 500 ms against medians of 174 ms and 71 ms. In the per-frame CSVs the affected frames are scattered through the window rather than clustered at its start, so this is not warm-up leaking past the discard; simulation and presentation times in those frames are normal and the whole excess sits in the unattributed residual. The stalls arrive about every 1.56 seconds of wall-clock in both configurations and each pads its frame to a near-constant ~500 ms, and they never appear in configurations whose frames are under about 50 ms. It is an environmental stall outside the benchmark, left in the data rather than filtered out — and the clearest reason every headline figure here is a median.
 
-**`zeroAlloc` is not literally zero.** It reports 48–64 KB per frame, roughly constant across agent counts, so whatever remains is fixed per-frame overhead and not in the per-agent path — the known candidate being the one string the HUD must hand to IMGUI each time the panel's text changes, since IMGUI takes a `string` and cannot be given a builder. Those figures sit near the resolution limit of a heap-size counter that moves in allocator-block steps, so treat them as an upper bound rather than a measurement. Collections per frame, which fall from 10.95 to 0.07, are the firmer evidence.
-
-**That is why GC collections / frame is the primary allocation metric here.** It is measured in every row regardless of how heavy the allocation is, and it counts the thing that actually costs frame time — a collection is a pause. Bytes per frame are the supporting detail, reported where they can be.
-
-**Frame cost and step cost describe the same work in every row.** Benchmark mode runs exactly one fixed-timestep step per frame, so a row's frame time always includes exactly one simulation step plus presentation and rendering. (Interactive play still paces itself against real time; those rows are marked `realtime-accumulator-capped` in `stepping_mode` and are not results.)
+**`zeroAlloc` is not literally zero.** It reports 48–72 KB per frame, roughly constant across agent counts, so what remains is fixed per-frame overhead rather than anything per-agent — the known candidate being the one string IMGUI must be handed each time the HUD text changes. Those figures also sit near the resolution of a heap counter that moves in allocator-block steps, so read them as an upper bound. Collections per frame, falling from 10.95 to 0.06, are the firmer evidence.
 
 ### Where the frame budget is crossed
 
@@ -151,17 +142,17 @@ Three columns deserve a note.
 
 ## Future work
 
-Two techniques this project originally sketched are not implemented. The reasons are worth stating precisely, because "there was no time" and "it would have broken the thing that makes the other numbers trustworthy" are very different admissions.
+Two techniques originally sketched for this project are not implemented, and the two reasons are different in kind.
 
-**Tick budgeting** — updating a fraction of the agents each step rather than all of them — is absent because it cannot satisfy the acceptance criterion everything else here is held to. Every technique has to produce a bit-identical `state_hash` to its control, and that criterion is what turns "it got faster" into "the cost changed and the result did not". Time-slicing deliberately changes what the simulation computes: an agent updated every fourth step follows a different trajectory, and no amount of care makes those floats match. Measuring it honestly would need a different correctness framework altogether — bounding how far trajectories may diverge over how long, and deciding what divergence is acceptable for a crowd — and that framework is a larger piece of work than the optimisation it would license. Adding it under the current rules would have meant either a false equivalence claim or a silent exception to the one rule the project actually enforces.
+**Tick budgeting** — updating a fraction of the agents each step — cannot satisfy the acceptance rule everything else is held to. Time-slicing deliberately changes what the simulation computes: an agent updated every fourth step follows a different trajectory, and no amount of care makes those floats match. Measuring it honestly would need a different correctness framework — bounding how far trajectories may diverge over how long — which is a larger piece of work than the optimisation itself. Adding it under the current rules would have meant either a false equivalence claim or a silent exception to the one rule this project actually enforces.
 
-**Burst parallelisation** is the obvious next step, and the groundwork is already done rather than merely intended: `com.unity.burst`, `com.unity.collections` and `com.unity.mathematics` have been in the manifest since day 1, agent state is already parallel arrays of structs rather than objects, and the step is already two-phase and order-independent — it reads the previous step's state and writes into a separate buffer, which is the shape `IJobParallelFor` wants. The honest reason it is absent is time. It would also be the first technique where bit-identical output does not come for free: parallel reduction of a float sum depends on partition order, so the separation accumulation would need the same ascending-index discipline the spatial hash already follows, applied across threads rather than within one.
+**Burst parallelisation** is the obvious next step and the groundwork is already there: the packages have been in the manifest since day 1, agent state is already parallel arrays of structs, and the step is already two-phase and order-independent — the shape `IJobParallelFor` wants. The honest reason it is absent is time. It would also be the first technique where bit-identical output is not free, since parallel float reduction depends on partition order.
 
 The measurements say where the remaining cost is. At 18,000 agents the frame is 14.21 ms, of which the simulation step is 12.65 ms and presentation is 0.15 ms. Rendering is no longer worth attacking. The step is — and it is single-threaded on a sixteen-thread machine.
 
 ## Not in scope
 
-No pathfinding (steering and goals only), no full DOTS/Entities conversion, no gameplay, no menus, no art, no custom shaders, no second scene, and no test suite beyond the single smoke test that proves the harness runs.
+No pathfinding (steering and goals only), no full DOTS/Entities conversion, no gameplay, menus, art, custom shaders or second scene, and no test suite beyond the equivalence tests that guard the neighbour search.
 
 ## Rights
 
