@@ -1,0 +1,18 @@
+# Auto detect text files and perform LF normalization
+* text=auto
+
+# Unity writes .meta files to track asset GUIDs. They are bookkeeping, not authored source, and
+# there are as many of them as there are assets — counting them as written work misrepresents what
+# this repository is.
+*.meta linguist-generated=true
+
+# Resolved by Unity's package manager from Packages/manifest.json, which is the file actually
+# authored here.
+Packages/packages-lock.json linguist-generated=true
+
+# The measurements. These are the program's output — 6 MB of it — and they are committed on purpose
+# as evidence, but they are not source and should not be read as authorship.
+results/*.csv linguist-generated=true
+
+# Left detectable on purpose: the C# under Assets/, the Python under tools/, the scene, the
+# SimConfig assets and the material are authored content and are legitimately what this project is.

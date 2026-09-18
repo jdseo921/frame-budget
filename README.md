@@ -163,6 +163,8 @@ The measurements say where the remaining cost is. At 18,000 agents the frame is 
 
 No pathfinding (steering and goals only), no full DOTS/Entities conversion, no gameplay, no menus, no art, no custom shaders, no second scene, and no test suite beyond the single smoke test that proves the harness runs.
 
-## License
+## Rights
 
-MIT. See `LICENSE`.
+This repository contains personal portfolio code for employment review. All rights are reserved by the author. No permission is granted for commercial reuse, redistribution, or modification.
+
+The reservation covers the original work in this project: the C# under `Assets/`, the Python under `tools/`, the scene, the `SimConfig` assets and material, the documentation under `docs/`, and the measurements committed in `results/`. It does not extend to the Unity Engine or its packages, which are licensed separately by their owners and are not distributed here — nor to Unity's built-in cube mesh and Standard shader, which the scene references at runtime and which remain Unity's.
